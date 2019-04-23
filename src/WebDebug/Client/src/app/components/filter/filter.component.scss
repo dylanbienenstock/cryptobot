@@ -1,0 +1,146 @@
+@import "../../../variables";
+
+:host {
+    .container {
+        display: flex;
+        flex-flow: row nowrap;
+        position: absolute;
+        top: $control-height;
+        width: 400px;
+
+        visibility: hidden;
+        &.ready { visibility: visible; }
+
+        &.right-to-left {
+            left: 100%;
+            flex-direction: row-reverse;
+            transform: translateX(-100%);
+
+            .section-container { direction: rtl; }
+            .icon { transform: translateY(-50%) scaleX(-1) !important; }
+
+            .shadow {
+                right: unset !important;
+                left: 0;
+                transform: scaleX(-1);
+            }
+        }
+
+        &.bottom-to-top {
+            top: 0;
+            transform: translateY(-100%);
+            
+            .section-container-inner {
+                position: relative;
+                top: 100%;
+                transform: translateY(-100%);
+            }
+        }
+
+        &.right-to-left.bottom-to-top {
+            transform: translate(-100%, -100%);
+        }
+    
+        .section-container,
+        .option-container {
+            position: relative;
+            display: inline-block;
+            width: 200px;
+            height: 400px;
+            vertical-align: top;
+            
+            .section-container-inner,
+            .option-container-inner {
+                max-height: 400px;
+                overflow-y: auto;
+
+                .shadow {
+                    position: absolute;
+                    right: 0;
+                    width: 6px;
+                    opacity: 0.3;
+        
+                    background: linear-gradient(-90deg,
+                        rgba(black, 1.00) 0%,
+                        rgba(black, 0.25) 50%,
+                        rgba(black, 0.00) 100%
+                    );
+                }
+        
+                .section,
+                .option {
+                    cursor: pointer;
+        
+                    height: 48px;
+                    padding: 0 12px;
+            
+                    background-color: white;
+
+                    .section-inner,
+                    .option-inner {
+                        display: flex;
+                        width: 100%;
+                        height: 100%;
+                        font-size: 0;
+        
+                        .section-name, .option-name { flex: 1; }
+                        .section-arrow, .option-icon { opacity: 0.4; }
+        
+                        .text {
+                            display: inline-block;
+                            position: relative;
+                            top: 50%;
+                            transform: translateY(-50%);
+                            font-size: 12px;
+                            user-select: none;
+        
+                            &.status {
+                                direction: rtl;
+                                text-transform: uppercase;
+
+                                &.icon {
+                                    font-size: 16px;
+                                }
+                            }
+                        }
+                    }
+        
+                    &:hover, &.selected {
+                        .section-inner .section-arrow,
+                        .option-inner .option-icon {
+                            opacity: 1;
+                        }
+                    }
+        
+                    &.selected { background-color: darken(white, 8%); }
+                    &:hover    { background-color: $hover-background; }
+                    &:active   { background-color: $active-background; }
+                }
+
+                .option {
+                    .option-filter-status .text { color: red; }
+
+                    &.enabled {
+                        $background: hsl(120, 100%, 90%);
+                        background-color: $background;
+                        .option-filter-status .text { color: #00b800; }
+
+                        &:hover    { background-color: darken($background, 8%); }
+                        &:active   { background-color: darken($background, 14%); }
+                    }
+                }
+            }
+        }
+
+        .option-container {
+            display: inline-block;
+            width: 200px;
+            vertical-align: top;
+    
+            .option-filter-status .text {
+                width: 13px;
+                text-align: center;
+            }
+        }
+    }
+}

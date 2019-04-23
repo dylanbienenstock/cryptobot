@@ -1,0 +1,7 @@
+.vscode/
+bin/
+obj/
+node_modules/
+
+journal.log
+marketgraph.png

@@ -1,0 +1,84 @@
+<div class="veil"
+*ngIf="veilPresentInDOM"
+[class.show]="showVeil"
+(click)="onHideAllMenus()">
+</div>
+
+<div class="container" *ngIf="!state?.splitVertical && !state?.splitHorizontal; else split">
+    <div class="container-inner">
+        <div class="controls">
+            <div class="controls-inner">
+                <div class="scope">
+                    <div class="inner">
+                        <span class="text icon">☰</span>
+                    </div>
+                </div>
+
+                <div class="filter" [class.active]="filterMenuReady">
+                    <app-filter
+                    [menu]="filterMenu"
+                    [show]="showFilterMenu"
+                    (menuReady)="filterMenuReady = $event"
+                    (optionToggled)="onUpdateSubscriptionChanged($event)">
+                    </app-filter>
+
+                    <div class="inner" (click)="onToggleFilterMenu()">
+                        <span class="text">Filter</span>
+                    </div>
+                </div>
+                
+                <div class="view">
+                    <div class="inner">
+                        <span class="text">View</span>
+                    </div>
+                </div>
+
+                <div class="split-vertical"
+                *ngIf="depthVertical < 2"
+                (click)="onSplitVertical()">
+                    <div class="inner">
+                        <span class="text icon">◫</span>
+                    </div>
+                </div>
+
+                <div class="split-horizontal"
+                *ngIf="depthHorizontal < 2"
+                (click)="onSplitHorizontal()">
+                    <div class="inner">
+                        <span class="text icon">◫</span>
+                    </div>
+                </div>
+
+                <div class="spacer"></div>
+
+                <div class="remove"
+                (click)="onMergePropagated(state.uuid)">
+                    <div class="inner">
+                        <span class="text icon">&times;</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="vistarget-container">
+            <canvas #visTarget></canvas>
+        </div>
+
+        <div class="status"></div>
+    </div>
+</div>
+
+<ng-template #split>
+    <div class="split"
+    [class.vertical]="state.splitVertical"
+    [class.horizontal]="state.splitHorizontal">
+        <div class="tile" *ngFor="let childState of state.children; index as index">
+            <app-tile
+            [state]="childState"
+            [depthVertical]="depthVertical + (state.splitVertical ? 1 : 0)"
+            [depthHorizontal]="depthHorizontal + (state.splitHorizontal ? 1 : 0)"
+            (propagateMerge)="onMergePropagated($event)">
+            </app-tile>
+        </div>
+    </div>
+</ng-template>

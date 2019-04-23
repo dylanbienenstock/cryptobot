@@ -1,0 +1,7 @@
+@title: Basic Renko
+@timescale: 30s
+
+renko: ATR14->RENKO~bids
+
+when renko up 1
+|   buy 75%
