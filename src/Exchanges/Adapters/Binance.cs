@@ -66,92 +66,168 @@ namespace CryptoBot.Exchanges
             public decimal[][] Asks;
         }
 
-        private static dynamic B_Uris = new {
-            Symbols = "https://api.binance.com/api/v1/exchangeInfo",
-            Snapshot = "https://www.binance.com/api/v1/depth?symbol=",
-            Websocket = "wss://stream.binance.com:9443/stream?streams="
-        };
+        public struct B_Trade
+        {
+            [JsonProperty("t")]
+            public int Id;
 
-        private B_OrderFeed _orderFeed;
-        private IDisposable     _orderFeedSubscription;
-        private B_Observable    _OrderStream;
-        private B_ObserverList  _observers;
-        private bool            _fullyConnected;
-        private ExchangeDetails _Details;
-        private B_SnapshotDict  _snapshots;
-        private B_UpdateBuffer  _updateBuffer;
-        private B_SymbolDict    _symbolDict;
+            [JsonProperty("s")]
+            public string Symbol;
+
+            [JsonProperty("p")]
+            public decimal Price;
+
+            [JsonProperty("q")]
+            public decimal Amount;
+
+            [JsonProperty("T")]
+            public long Time;
+
+            [JsonProperty("m")]
+            public bool BuyerIsMaker;
+        }
+
+        public struct B_AggUpdate
+        {
+            [JsonProperty("stream")]
+            public string StreamName;
+
+            [JsonProperty("data")]
+            public B_Update Data;
+        }
+
+        public struct B_AggTrade
+        {
+            [JsonProperty("stream")]
+            public string StreamName;
+
+            [JsonProperty("data")]
+            public B_Trade Data;
+        }
+
+        private WebSocketFeed<B_AggUpdate>         _orderFeed;
+        private WebSocketFeed<B_AggTrade>          _tradeFeed;
+        private IDisposable                        _orderFeedSubscription;
+        private IDisposable                        _tradeFeedSubscription;
+        private IObservable<CurrencyOrder>         _orderStream;
+        private IObservable<CurrencyTrade>         _tradeStream;
+        private List<IObserver<CurrencyOrder>>     _orderObservers;
+        private List<IObserver<CurrencyTrade>>     _tradeObservers;
+        private ExchangeDetails                    _details;
+        private Dictionary<string, B_Snapshot>     _snapshots;
+        private Dictionary<string, List<B_Update>> _updateBuffer;
+        private Dictionary<string, string[]>       _symbolDict;
+        private HttpBackoffClient                  _httpClient;
+        private bool                               _fullyConnected;
 
         public Binance()
         {
-            _Details       = new ExchangeDetails("Binance", 0.001m);
-            _OrderStream   = Observable.Create((B_Observer o) => OnSubscribe(o));
+            _details        = new ExchangeDetails("Binance", 0.001m);
+            _orderStream    = Observable.Create((IObserver<CurrencyOrder> o) => OnOrderStreamSubscribed(o));
+            _tradeStream    = Observable.Create((IObserver<CurrencyTrade> t) => OnTradeStreamSubscribed(t));
+            _orderObservers = new List<IObserver<CurrencyOrder>>();
+            _tradeObservers = new List<IObserver<CurrencyTrade>>();
+            _snapshots      = new Dictionary<string, B_Snapshot>();
+            _updateBuffer   = new Dictionary<string, List<B_Update>>();
+            _symbolDict     = new Dictionary<string, string[]>();
+            _httpClient     = new HttpBackoffClient("https://www.binance.com/api/v1/");
             _fullyConnected = false;
-            _observers      = new B_ObserverList();
-            _snapshots      = new B_SnapshotDict();
-            _updateBuffer   = new B_UpdateBuffer();
-            _symbolDict     = new B_SymbolDict();
+
+            _httpClient.SetBackoff((attempts, response) =>
+            {
+                if (response == null) return null;
+
+                int statusCode = (int)response.StatusCode;
+
+                if (statusCode == 418 || statusCode == 429)
+                {
+                    string delayHeader = response.Headers.GetValues("Retry-After").First();
+                    return int.Parse(delayHeader) * 1000 + 500;
+                }
+
+                return null;
+            });
         }
 
-        public override IObservable<CurrencyOrder> OrderStream => _OrderStream;
-        public override IObservable<CurrencyTrade> TradeStream => throw new NotImplementedException();
-        public override ExchangeDetails Details => _Details;
+        public override IObservable<CurrencyOrder> OrderStream => _orderStream;
+        public override IObservable<CurrencyTrade> TradeStream => _tradeStream;
+        public override ExchangeDetails Details => _details;
 
         public override string[] SplitSymbol(string symbol) => _symbolDict[symbol];
 
         public override async Task<List<string>> FetchSymbols()
         {
-            var response = await Http.GetAsync(B_Uris.Symbols);
-            string responseBody = await response.Content.ReadAsStringAsync();
+            B_ExchangeInfo response = await _httpClient.Get<B_ExchangeInfo>("exchangeInfo");
+            var symbols = response.Symbols.Select(s => s.Symbol);
 
-            var symbolsResponse = JsonConvert.DeserializeObject<B_ExchangeInfo>(responseBody);
-            var symbols = symbolsResponse.Symbols.Select(s => s.Symbol);
-
-            foreach (var symbol in symbolsResponse.Symbols)
-                _symbolDict.Add(symbol.Symbol, new string[2] { symbol.Base, symbol.Quote });
+            foreach (var symbol in response.Symbols)
+                _symbolDict.Add(symbol.Symbol, new [] { symbol.Base, symbol.Quote });
 
             return symbols.ToList();
         }
 
-        public override Task<ExchangeTradeHistory> FetchTradeHistory(string symbol, double startTime, int periodDuration, int count)
+        public override async Task<List<HistoricalTradingPeriod>> FetchHistoricalTradingPeriods
+        (
+            string symbol,
+            double start,
+            int interval,
+            int count
+        )
         {
-            throw new NotImplementedException();
+            if (count > 1000) throw new Exception("Cannot fetch more than 1000 candles");
+
+            var intervalName = GetIntervalName(interval);
+            var tradingPeriods = (await _httpClient.Get<decimal[][]>
+            (
+                endpoint: "klines",
+                parameters: new UriParams
+                {
+                    { "symbol",    symbol        },
+                    { "interval",  intervalName  },
+                    { "limit",     count         },
+                    { "startTime", (Int64)start  }
+                }
+            ))
+            .Select(candle => new HistoricalTradingPeriod(candle))
+            .ToList();
+
+            return tradingPeriods;
         }
 
-        private IDisposable OnSubscribe(IObserver<CurrencyOrder> observer) {
-            _observers.Add(observer);
+        public override async Task<DateTime> FetchPairListingDate(CurrencyPair pair)
+        {
+            string symbol = CurrencyPairToSymbol(pair);
+            return (await FetchHistoricalTradingPeriods(symbol, 0, 60000, 1))[0].Time;
+        }
+
+        public string CurrencyPairToSymbol(CurrencyPair pair) =>
+            pair.ToString("").ToUpper();
+
+        private IDisposable OnOrderStreamSubscribed(IObserver<CurrencyOrder> observer) {
+            _orderObservers.Add(observer);
+            return Disposable.Empty;
+        }
+
+        private IDisposable OnTradeStreamSubscribed(IObserver<CurrencyTrade> observer) {
+            _tradeObservers.Add(observer);
             return Disposable.Empty;
         }
 
         private async Task GetSnapshots(List<string> symbols)
         {
-            int delay = 0;
-
             foreach (string symbol in symbols)
             {
-                bool gotSnapshot = false;
-
-                while (!gotSnapshot)
-                {
-                    Thread.Sleep(delay);
-
-                    var response = await Http.GetAsync(B_Uris.Snapshot + symbol);
-                    int statusCode = (int)response.StatusCode;
-
-                    if (statusCode == 418 || statusCode == 429)
+                var snapshot = await _httpClient.Get<B_Snapshot>
+                (
+                    endpoint: "depth",
+                    parameters: new UriParams
                     {
-                        string delayHeader = response.Headers.GetValues("Retry-After").First();
-                        delay = int.Parse(delayHeader) * 1000 + 500;
-                        continue;
+                        { "symbol", symbol }
                     }
+                );
 
-                    string responseBody = await response.Content.ReadAsStringAsync();
-                    var snapshot = JsonConvert.DeserializeObject<B_Snapshot>(responseBody);
-                    _snapshots[symbol] = snapshot;
-                    gotSnapshot = true;
-
-                    EmitSnapshot(snapshot, symbol);
-                }
+                _snapshots[symbol] = snapshot;
+                EmitSnapshot(snapshot, symbol);
             }
 
             _fullyConnected = true;
@@ -159,19 +235,46 @@ namespace CryptoBot.Exchanges
 
         public override async void Connect(List<string> symbols)
         {
-            string feedNames = string.Join("@depth/", symbols).ToLower();
-            _orderFeed = new WebSocketFeed<B_AggUpdate>(B_Uris.Websocket + feedNames);
+            string websocketUri = "wss://stream.binance.com:9443/stream?streams=";
+
+            string orderFeedNames = string.Join("@depth/", symbols).ToLower() + "@depth";
+            _orderFeed = new WebSocketFeed<B_AggUpdate>(websocketUri + orderFeedNames);
             _orderFeedSubscription = _orderFeed.Subscribe(EmitAggregatedUpdate);
 
+            string tradeFeedNames = string.Join("@trade/", symbols).ToLower() + "@trade";
+            _tradeFeed = new WebSocketFeed<B_AggTrade>(websocketUri + tradeFeedNames);
+            _tradeFeedSubscription = _tradeFeed.Subscribe(EmitTrade);
+
+            _tradeFeed.Connect();
             _orderFeed.Connect();
-            await GetSnapshots(symbols);            
+            await GetSnapshots(symbols);
             EmitBufferedUpdates(symbols);
+        }
+
+        private void EmitTrade(B_AggTrade aggTrade)
+        {
+            var side = aggTrade.Data.BuyerIsMaker ? OrderSide.Bid : OrderSide.Ask;
+            var time = DateTime.UnixEpoch.AddMilliseconds(aggTrade.Data.Time);
+            var trade = new CurrencyTrade
+            (
+                exchange: this,
+                symbol:   aggTrade.Data.Symbol,
+                id:       aggTrade.Data.Id,
+                side:     side,
+                price:    aggTrade.Data.Price,
+                amount:   aggTrade.Data.Amount,
+                time:     time
+            );
+
+            lock (_tradeObservers)
+            {
+                _tradeObservers.ForEach(o => o.OnNext(trade));
+            }
         }
 
         private void EmitOrder(string symbol, OrderSide side, decimal[] orderTuple, long ms)
         {
-            var time = DateTime.UnixEpoch.AddMilliseconds(ms / 1000);
-
+            var time = DateTime.UnixEpoch.AddMilliseconds(ms);
             var order = new CurrencyOrder
             (
                 exchange: this,
@@ -182,9 +285,9 @@ namespace CryptoBot.Exchanges
                 time:     time
             );
 
-            lock (_observers)
+            lock (_orderObservers)
             {
-                _observers.ForEach(o => o.OnNext(order));
+                _orderObservers.ForEach(o => o.OnNext(order));
             }
         }
 
