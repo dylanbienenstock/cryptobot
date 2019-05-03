@@ -426,5 +426,10 @@ namespace CryptoBot.Exchanges.Adapters
                 EmitOrder(data.Symbol, (OrderSide)side, price, amount, data.Time);
             }
         }
+
+        public override Task<DateTime> FetchPairListingDate(CurrencyPair pair)
+        {
+            throw new NotImplementedException();
+        }
     }
 }
