@@ -37,11 +37,11 @@ namespace CryptoBot.Series
             switch (Type)
             {
                 case Smoothing.Modified:
-                    _alpha = 1m / _periods;
+                    _alpha = 1.0m / _periods;
                     break;
 
                 case Smoothing.Exponential:
-                    _alpha = 2m / (_periods + 1.0m);
+                    _alpha = 2.0m / (_periods + 1.0m);
                     break;
             }
         }
@@ -49,11 +49,11 @@ namespace CryptoBot.Series
         public void Add(decimal value)
         {
             _updateAverage = Average;
+            _count++;
 
             switch (Type)
             {
                 case Smoothing.Simple:
-                    _count++;
                     _sum += value;
                     Average = _sum / _count;
                     break;
@@ -74,9 +74,10 @@ namespace CryptoBot.Series
 
         public void Subtract(decimal value)
         {
+            _count--;
+
             if (Type != Smoothing.Simple) return;
             
-            _count--;
             _sum -= value;
             if (_count == 0) Average = _sum;
             else Average = _sum / _count;
