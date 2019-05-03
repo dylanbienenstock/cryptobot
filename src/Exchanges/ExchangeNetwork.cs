@@ -11,6 +11,12 @@ using CryptoBot.Exchanges.Orders;
 
 namespace CryptoBot.Exchanges
 {
+    public enum CurrencyFilter
+    {
+        Either,
+        Both,
+        Neither
+    }
     /// <summary>
     /// A collection of <see cref="Exchange"/> objects.
     /// * Gets all available symbols from each exchange and compiles them into a <see cref="Arbitrage.MarketGraph"/> object.
@@ -48,6 +54,7 @@ namespace CryptoBot.Exchanges
         public List<IObservable<CurrencyTrade>> TradeStreams;
 
         private Currency[] _currencyFilter;
+        private CurrencyFilter _currencyFilterMode;
 
         private IDisposable _mergedTradeStreamSubscription;
         private Dictionary<Market, bool> _marketComplete;
@@ -58,7 +65,7 @@ namespace CryptoBot.Exchanges
         /// Creates a new <see cref="ExchangeNetwork"/>
         /// </summary>
         /// <param name="exchanges">Exchanges to load and add to the network</param>
-        public ExchangeNetwork(Exchange[] exchanges, Currency[] currencies = null)
+        public ExchangeNetwork(Exchange[] exchanges, CurrencyFilter filter = CurrencyFilter.Either, Currency[] currencies = null)
         {
             HttpClient = new HttpClient();
             HttpClient.DefaultRequestHeaders.Add("User-Agent", @"
@@ -72,6 +79,7 @@ namespace CryptoBot.Exchanges
             OrderStreams = new List<IObservable<CurrencyOrder>>();
             TradeStreams = new List<IObservable<CurrencyTrade>>();
             _currencyFilter = currencies;
+            _currencyFilterMode = filter;
             _marketComplete = new Dictionary<Market, bool>();
             _tradeBuffers = new Dictionary<Market, List<CurrencyTrade>>();
             _tradeBufferLockObj = new object();
@@ -100,8 +108,24 @@ namespace CryptoBot.Exchanges
                     if (_currencyFilter != null)
                     {
                         var pair = new CurrencyPair(exchange, symbol);
-                        if (!_currencyFilter.Contains(pair.Base) || !_currencyFilter.Contains(pair.Quote))
-                            continue;
+                        bool allowBase = _currencyFilter.Contains(pair.Base);
+                        bool allowQuote = _currencyFilter.Contains(pair.Quote);
+                        bool allowPair = false;
+
+                        switch (_currencyFilterMode)
+                        {
+                            case CurrencyFilter.Either:
+                                allowPair = allowBase || allowQuote;
+                                break;
+                            case CurrencyFilter.Both:
+                                allowPair = allowBase && allowQuote;
+                                break;
+                            case CurrencyFilter.Neither:
+                                allowPair = !allowBase && !allowQuote;
+                                break;
+                        }
+
+                        if (!allowPair) continue;
                     }
 
                     var market = new Market(exchange, symbol);
