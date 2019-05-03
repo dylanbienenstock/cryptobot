@@ -15,14 +15,6 @@ using System.Threading;
 
 namespace CryptoBot.Exchanges.Adapters
 {
-    // using List<IObserver<CurrencyOrder>> = List<IObserver<CurrencyOrder>>;
-    // using IObserver<CurrencyOrder>     = IObserver<CurrencyOrder>;
-    // using IObservable<CurrencyTrade>       = IObservable<CurrencyTrade>;
-    // using List<IObserver<CurrencyTrade>> = List<IObserver<CurrencyTrade>>;
-    // using IObserver<CurrencyTrade>     = IObserver<CurrencyTrade>;
-    // using Dictionary<string, int>       = Dictionary<string, int>;
-    // using Dictionary<string, List<CoinbasePro.CB_FeedData>>   = Dictionary<string, List<CoinbasePro.CB_FeedData>>;
-
     public class CoinbasePro : Exchange
     {
         /// <summary>
