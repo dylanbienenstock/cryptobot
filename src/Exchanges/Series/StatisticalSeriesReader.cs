@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using CryptoBot.Indicators;
 
 namespace CryptoBot.Exchanges.Series
 {
@@ -13,11 +14,12 @@ namespace CryptoBot.Exchanges.Series
             Source.BindReader(this);
         }
 
-        public abstract void OnPostAdd(StatisticalSeriesNode<T> node);
-        public abstract void OnPreUpdate(StatisticalSeriesNode<T> node);
-        public abstract void OnPostUpdate(StatisticalSeriesNode<T> node);
-        public abstract void OnPostRemove(StatisticalSeriesNode<T> node);
-        public abstract void OnComplete();
-        public abstract void OnFinalizeRecord(StatisticalSeriesNode<T> node);
+        public virtual void OnPreAdd(StatisticalSeriesNode<T> node) { }
+        public virtual void OnPostAdd(StatisticalSeriesNode<T> node) { }
+        public virtual void OnPreUpdate(StatisticalSeriesNode<T> node) { }
+        public virtual void OnPostUpdate(StatisticalSeriesNode<T> node) { }
+        public virtual void OnPostRemove(StatisticalSeriesNode<T> node) { }
+        public virtual void OnComplete() { }
+        public virtual void OnFinalizeRecord(StatisticalSeriesNode<T> node) { }
     }
 }
