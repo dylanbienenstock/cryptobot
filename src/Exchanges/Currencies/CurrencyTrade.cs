@@ -35,15 +35,6 @@ namespace CryptoBot.Exchanges.Currencies
             Time     = time;
         }
 
-        public double GetQuantizedMilliseconds(double periodDurationMilliseconds) => 
-            GetQuantizedMilliseconds((int)periodDurationMilliseconds);
-
-        public double GetQuantizedMilliseconds(int intervalMilliseconds)
-        {
-            var milliseconds = (Time - DateTime.UnixEpoch).TotalMilliseconds;
-            return Math.Floor(milliseconds / intervalMilliseconds) * intervalMilliseconds;
-        }
-
         public override string ToString()
         {
             return String.Format(
