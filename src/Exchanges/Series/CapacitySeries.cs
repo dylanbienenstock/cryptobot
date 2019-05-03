@@ -31,7 +31,7 @@ namespace CryptoBot.Exchanges.Series
                 if (Count > Capacity)
                     DetachHead();
 
-                EmitFinishModify(node);
+                EmitFinalizeRecord(node);
             }
         }
     }

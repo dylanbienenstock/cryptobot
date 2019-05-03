@@ -31,7 +31,7 @@ namespace CryptoBot.Exchanges.Series
 
                 AppendTail(node);
                 RemoveExpiredRecords();
-                EmitFinishModify(node);
+                EmitFinalizeRecord(node);
             }
         }
 

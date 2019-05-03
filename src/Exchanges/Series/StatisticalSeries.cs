@@ -56,7 +56,7 @@ namespace CryptoBot.Exchanges.Series
                 Tail.Value = value;
                 
                 EmitPostUpdate(Tail);
-                EmitFinishModify(Tail);
+                EmitFinalizeRecord(Tail);
             }
         }
 
@@ -82,7 +82,7 @@ namespace CryptoBot.Exchanges.Series
         private void EmitPostUpdate(StatisticalSeriesNode<T> node) => Readers.ForEach(r => r.OnPostUpdate(node));
         private void EmitPostRemove(StatisticalSeriesNode<T> node) => Readers.ForEach(r => r.OnPostRemove(node));
         protected void EmitComplete() => Readers.ForEach(r => r.OnComplete());
-        protected void EmitFinishModify(StatisticalSeriesNode<T> node) => Readers.ForEach(r => r.OnFinalizeRecord(node));
+        protected void EmitFinalizeRecord(StatisticalSeriesNode<T> node) => Readers.ForEach(r => r.OnFinalizeRecord(node));
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
         public IEnumerator<StatisticalSeriesNode<T>> GetEnumerator()
