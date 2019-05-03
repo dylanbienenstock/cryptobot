@@ -7,7 +7,7 @@ namespace CryptoBot.Exchanges.Series
     {
         public StatisticalSeries<T> Source;
 
-        public StatisticalSeriesReader(StatisticalSeries<T> series)
+        public void BindTo(StatisticalSeries<T> series)
         {
             Source = series;
             Source.BindReader(this);
