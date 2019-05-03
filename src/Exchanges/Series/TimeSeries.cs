@@ -11,6 +11,9 @@ namespace CryptoBot.Exchanges.Series
         private Dictionary<StatisticalSeriesNode<T>, DateTime> _times;
         private object _lockObj;
 
+        public DateTime HeadTime => GetTime(Head);
+        public DateTime TailTime => GetTime(Tail);
+
         public TimeSeries(TimeSpan duration)
         {
             _duration = duration;
