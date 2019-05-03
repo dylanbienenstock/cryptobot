@@ -25,11 +25,37 @@ namespace CryptoBot.Exchanges.Series
 
         public void BindReader(StatisticalSeriesReader<T> reader) => Readers.Add(reader);
 
+        public void BindAnonymousReader
+        (
+            Action<StatisticalSeriesNode<T>> OnPreAdd         = null,
+            Action<StatisticalSeriesNode<T>> OnPostAdd        = null,
+            Action<StatisticalSeriesNode<T>> OnPreUpdate      = null,
+            Action<StatisticalSeriesNode<T>> OnPostUpdate     = null,
+            Action<StatisticalSeriesNode<T>> OnPostRemove     = null,
+            Action<StatisticalSeriesNode<T>> OnFinalizeRecord = null,
+            Action                           OnComplete       = null
+        )
+        {
+            var anonymousReader = new AnonymousStatisticalSeriesReader<T>
+            (
+                onPreAdd:         OnPreAdd,
+                onPostAdd:        OnPostAdd,
+                onPreUpdate:      OnPreUpdate,
+                onPostUpdate:     OnPostUpdate,
+                onPostRemove:     OnPostRemove,
+                onFinalizeRecord: OnFinalizeRecord,
+                onComplete:       OnComplete
+            );
+
+            BindReader(anonymousReader);
+        }
+
         protected void AppendTail(StatisticalSeriesNode<T> node)
         {
             lock (_lockObj)
             {
                 EmitPreAdd(node);
+
                 if (Head == null)
                 {
                     Head = node;
@@ -95,6 +121,16 @@ namespace CryptoBot.Exchanges.Series
                 yield return node;
                 node = (StatisticalSeriesNode<T>)node.Next;
             }
+        }
+
+        public List<StatisticalSeriesNode<T>> ToList()
+        {
+            var list = new List<StatisticalSeriesNode<T>>();
+
+            foreach (var node in this)
+                list.Add(node);
+
+            return list;
         }
     }
 }
