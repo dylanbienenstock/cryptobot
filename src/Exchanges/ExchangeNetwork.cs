@@ -203,36 +203,20 @@ namespace CryptoBot.Exchanges
             {
                 Console.Write($"[{exchange.Name}] Fetching historical rates... ");
 
-                int backoffs = 0;
-                Exception lastException = null;
-                
                 foreach (var market in exchange.Markets.Values)
                 {
-                    while (backoffs <= maxBackoffs)
-                    {
-                        try
-                        {
-                            var periods = await exchange.FetchTradeHistory
-                            (
-                                symbol: market.Symbol,
-                                startTime: firstPeriodMilliseconds,
-                                periodDuration: periodDuration,
-                                count: periodCount
-                            );
+                    var periods = await exchange.FetchHistoricalTradingPeriods
+                    (
+                        symbol: market.Symbol,
+                        startTime: firstPeriodMilliseconds,
+                        periodDuration: periodDuration,
+                        count: periodCount
+                    );
 
-                            periods.Apply(market);
-                            PlaybackBufferedTrades(market);
-                            backoffs = Math.Max(backoffs - 1, 0);
-                            break;
-                        }
-                        catch (Exception ex)
-                        {
-                            lastException = ex;
-                            Thread.Sleep(++backoffs ^ 2 * 2000);
-                        }
-                    }
+                    Indicators.AddHistoricalTradingPeriods(market, periods);
+                    PlaybackBufferedTrades(market);
 
-                    if (lastException != null) throw lastException;
+                    market.UpToDate = true;
                 }
 
                 WriteCheckmark(ConsoleColor.Yellow);
