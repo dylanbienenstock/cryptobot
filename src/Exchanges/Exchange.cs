@@ -17,7 +17,7 @@ namespace CryptoBot.Exchanges
     {
         public ExchangeNetwork Network;
 
-        /// /// <summary>
+        /// <summary>
         /// The order in which it was loaded by its containing <see cref="ExchangeNetwork"/>
         /// </summary>
         public int Index;
@@ -29,7 +29,8 @@ namespace CryptoBot.Exchanges
         public abstract ExchangeDetails Details { get; }
 
         public abstract Task<List<string>> FetchSymbols();
-        public abstract Task<ExchangeTradeHistory> FetchTradeHistory(string symbol, double startTime, int periodDuration, int count);
+        public abstract Task<List<HistoricalTradingPeriod>> FetchHistoricalTradingPeriods(string symbol, double startTime, int periodDuration, int count);
+        public abstract Task<DateTime> FetchPairListingDate(CurrencyPair pair);
         public abstract void Connect(List<string> symbols);
         public abstract string[] SplitSymbol(string symbol);
 
