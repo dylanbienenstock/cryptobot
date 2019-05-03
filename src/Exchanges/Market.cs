@@ -15,7 +15,6 @@ namespace CryptoBot.Exchanges
         public string Symbol;
         public CurrencyPair Pair;
         public TimeSeries<CurrencyTrade> Trades;
-        public TradingPeriodSeries TradingPeriods;
         public OrderBook Orders;
         public decimal BestBid => Orders.BestBid;
         public decimal BestAsk => Orders.BestAsk;
@@ -26,7 +25,6 @@ namespace CryptoBot.Exchanges
             Symbol = symbol;
             Pair = new CurrencyPair(exchange, symbol);
             Trades = new TimeSeries<CurrencyTrade>(TradeHistoryDuration);
-            TradingPeriods = new TradingPeriodSeries(Trades, 60000, 14);
             Orders = new OrderBook(64);
         }
 
