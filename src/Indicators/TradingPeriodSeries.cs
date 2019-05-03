@@ -13,16 +13,18 @@ namespace CryptoBot.Indicators
         private DateTime _currentPeriodStart;
         private DateTime _nextPeriodStart;
 
-        public TradingPeriodSeries(TimeSeries<CurrencyTrade> timeseries, int periodDurationMilliseconds, int periods) : base(timeseries)
+        public TradingPeriodSeries(TimeSeries<CurrencyTrade> timeseries, int periodDurationMilliseconds, int periods)
         {
             Values = new CapacitySeries<TradingPeriod>(periods);
             Periods = periods;
             _periodDurationMilliseconds = periodDurationMilliseconds;
+
+            BindTo(timeseries);
         }
 
         public override void OnPostAdd(StatisticalSeriesNode<CurrencyTrade> node)
         {
-            var quantizedMilliseconds = node.Value.GetQuantizedMilliseconds(_periodDurationMilliseconds);
+            var quantizedMilliseconds = node.Value.Time.GetQuantizedMilliseconds(_periodDurationMilliseconds);
             var quantizedTime = (DateTime.UnixEpoch).AddMilliseconds(quantizedMilliseconds);
 
             if (Values.Head == null || AfterCurrentPeriod(quantizedTime))
@@ -40,10 +42,32 @@ namespace CryptoBot.Indicators
         public void Add(TradingPeriod period)
         {
             var nodeMilliseconds = (period.Time - DateTime.UnixEpoch).TotalMilliseconds;
-            var quantizedMilliseconds =
-                Math.Floor(nodeMilliseconds / _periodDurationMilliseconds)
+            var quantizedMilliseconds = Math.Floor(nodeMilliseconds / _periodDurationMilliseconds)
                 * _periodDurationMilliseconds;
-            var quantizedTime = (DateTime.UnixEpoch).AddMilliseconds(quantizedMilliseconds);
+            var quantizedTime = DateTime.UnixEpoch.AddMilliseconds(quantizedMilliseconds);
+
+            if (Values.Tail != null)
+            {
+                var lastPeriod = Values.Tail.Value;
+
+                if (quantizedTime == lastPeriod.Time)
+                {
+                    Values.UpdateTail
+                    (
+                        new TradingPeriod
+                        (
+                            time:   lastPeriod.Time,
+                            open:   lastPeriod.Open,
+                            high:   Math.Max(lastPeriod.High, period.High),
+                            low:    Math.Min(lastPeriod.Low, period.Low),
+                            close:  period.Close,
+                            volume: lastPeriod.Volume + period.Volume
+                        )
+                    );
+
+                    return;
+                }
+            }
 
             FillGaps(quantizedMilliseconds, true);
             Values.Record(period);
@@ -65,30 +89,44 @@ namespace CryptoBot.Indicators
                     var fillPeriodTime = Values.Tail.Value.Time
                         .AddMilliseconds(_periodDurationMilliseconds);
 
-                    Values.Record(new TradingPeriod
-                    {
-                        Time  = fillPeriodTime,
-                        Open  = Values.Tail.Value.Open,
-                        High  = Values.Tail.Value.High,
-                        Low   = Values.Tail.Value.Low,
-                        Close = Values.Tail.Value.Close,
-                    });
+                    var fillPeriod = new TradingPeriod
+                    (
+                        time:   fillPeriodTime,
+                        open:   Values.Tail.Value.Open,
+                        high:   Values.Tail.Value.High,
+                        low:    Values.Tail.Value.Low,
+                        close:  Values.Tail.Value.Close,
+                        volume: Values.Tail.Value.Volume
+                    );
+
+                    fillPeriod.Finished = true;
+                    Values.Record(fillPeriod);
                 }
             }
         }
 
+        public void OnPeriodClose()
+        {
+            if (Values.Tail == null) return;
+            Values.Tail.Value.Finished = true;
+        }
+
         private void CreateNewPeriod(StatisticalSeriesNode<CurrencyTrade> node, double quantizedMilliseconds, DateTime quantizedTime)
         {
+            OnPeriodClose();
             FillGaps(quantizedMilliseconds);
 
-            Values.Record(new TradingPeriod
-            {
-                Time  = quantizedTime,
-                Open  = node.Value.Price,
-                High  = node.Value.Price,
-                Low   = node.Value.Price,
-                Close = node.Value.Price,
-            });
+            Values.Record(
+                new TradingPeriod
+                (
+                    time:   quantizedTime,
+                    open:   node.Value.Price,
+                    high:   node.Value.Price,
+                    low:    node.Value.Price,
+                    close:  node.Value.Price,
+                    volume: node.Value.Amount
+                )
+            );
 
             _currentPeriodStart = quantizedTime;
             _nextPeriodStart = _currentPeriodStart.AddMilliseconds(_periodDurationMilliseconds);
@@ -96,14 +134,17 @@ namespace CryptoBot.Indicators
 
         private void UpdateCurrentPeriod(StatisticalSeriesNode<CurrencyTrade> node, DateTime quantizedTime)
         {
-            Values.UpdateTail(new TradingPeriod
-            {
-                Time  = quantizedTime,
-                Open  = Values.Tail.Value.Open,
-                High  = Math.Max(Values.Tail.Value.High, node.Value.Price),
-                Low   = Math.Min(Values.Tail.Value.Low, node.Value.Price),
-                Close = node.Value.Price,
-            });
+            Values.UpdateTail(
+                new TradingPeriod
+                (
+                    time:   quantizedTime,
+                    open:   Values.Tail.Value.Open,
+                    high:   Math.Max(Values.Tail.Value.High, node.Value.Price),
+                    low:    Math.Min(Values.Tail.Value.Low, node.Value.Price),
+                    close:  node.Value.Price,
+                    volume: Values.Tail.Value.Volume + node.Value.Amount
+                )
+            );
         }
 
         private bool WithinCurrentPeriod(DateTime quantizedTime) => 
