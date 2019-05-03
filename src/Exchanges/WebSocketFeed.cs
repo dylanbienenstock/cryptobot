@@ -78,6 +78,10 @@ namespace CryptoBot.Exchanges
                     endOfMessage = result.EndOfMessage;
                 }
 
+                data = data.Replace("\0", "");
+
+                if (String.IsNullOrEmpty(data)) continue;
+
                 T message = JsonConvert.DeserializeObject<T>(data);
 
                 observers.ForEach(o => o.OnNext(message));
