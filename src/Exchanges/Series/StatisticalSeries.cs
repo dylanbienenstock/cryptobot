@@ -29,6 +29,7 @@ namespace CryptoBot.Exchanges.Series
         {
             lock (_lockObj)
             {
+                EmitPreAdd(node);
                 if (Head == null)
                 {
                     Head = node;
@@ -77,6 +78,7 @@ namespace CryptoBot.Exchanges.Series
             }
         }
 
+        private void EmitPreAdd(StatisticalSeriesNode<T> node) => Readers.ForEach(r => r.OnPreAdd(node));
         private void EmitPostAdd(StatisticalSeriesNode<T> node) => Readers.ForEach(r => r.OnPostAdd(node));
         private void EmitPreUpdate(StatisticalSeriesNode<T> node) => Readers.ForEach(r => r.OnPreUpdate(node));
         private void EmitPostUpdate(StatisticalSeriesNode<T> node) => Readers.ForEach(r => r.OnPostUpdate(node));
