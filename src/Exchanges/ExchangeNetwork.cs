@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using CryptoBot.Arbitrage;
 using CryptoBot.Exchanges.Currencies;
 using CryptoBot.Exchanges.Orders;
+using CryptoBot.Indicators;
 
 namespace CryptoBot.Exchanges
 {
@@ -17,6 +18,7 @@ namespace CryptoBot.Exchanges
         Both,
         Neither
     }
+
     /// <summary>
     /// A collection of <see cref="Exchange"/> objects.
     /// * Gets all available symbols from each exchange and compiles them into a <see cref="Arbitrage.MarketGraph"/> object.
@@ -52,6 +54,11 @@ namespace CryptoBot.Exchanges
         /// A list of each exchange's trade steam observable
         /// </summary>
         public List<IObservable<CurrencyTrade>> TradeStreams;
+
+        /// <summary>
+        /// Manages an instance of each indicator for each market
+        /// </summary>
+        public IndicatorManifold Indicators;
 
         private Currency[] _currencyFilter;
         private CurrencyFilter _currencyFilterMode;
@@ -244,6 +251,8 @@ namespace CryptoBot.Exchanges
 
         private void OnConnected()
         {
+            Indicators = new IndicatorManifold(this);
+
             CurrencyGraph.Build();
             CurrencyGraph.RenderToImage();
 
