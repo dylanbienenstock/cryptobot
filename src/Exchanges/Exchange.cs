@@ -42,6 +42,20 @@ namespace CryptoBot.Exchanges
         public string Name => Details.Name;
         public decimal Fee => Details.Fee;
 
+        public static string GetIntervalName(int periodDuration)
+        {
+            switch (periodDuration)
+            {
+                case 60000:   return "1m";
+                case 180000:  return "3m";
+                case 300000:  return "5m";
+                case 900000:  return "15m";
+                case 1800000: return "30m";
+                case 3600000: return "1hr";
+                default:      return "1m";
+            }
+        }
+
         public void AddMarket(Market market)
         {
             if (Markets == null) Markets = new Dictionary<CurrencyPair, Market>();
