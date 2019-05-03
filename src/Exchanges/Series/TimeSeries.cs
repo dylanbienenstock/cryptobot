@@ -38,6 +38,21 @@ namespace CryptoBot.Exchanges.Series
             }
         }
 
+        public void Record(T value, DateTime time)
+        {
+            lock (_lockObj)
+            {
+                if (Tail != null && time < _times[Tail]) return;
+
+                var node = new StatisticalSeriesNode<T>(value);
+                _times[node] = time;
+
+                AppendTail(node);
+                RemoveExpiredRecords();
+                EmitFinalizeRecord(node);
+            }
+        }
+
         private void RemoveExpiredRecords()
         {
             lock (_lockObj)
@@ -55,5 +70,7 @@ namespace CryptoBot.Exchanges.Series
                 EmitComplete();
             }
         }
+
+        public DateTime GetTime(StatisticalSeriesNode<T> node) => _times[node];
     }
 }
