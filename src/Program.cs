@@ -20,16 +20,38 @@ namespace CryptoBot
     {
         public static CommandLineArguments Options;
         public static ExchangeNetwork Network;
+        public static IndicatorManifold Indicators;
+        public static InfluxStorage InfluxStorage;
 
         static void Main(string[] args)
         {
+            var startTime = DateTime.Now;
+
             Parser.Default.ParseArguments<CommandLineArguments>(args)
                 .WithParsed<CommandLineArguments>(o => Options = o);
 
+            Storage.Initialize();
+            TelegramBot.Initialize();
+
+            InfluxStorage = new InfluxStorage();
+
             AppDomain.CurrentDomain.ProcessExit += (_, __) => OnProcessExit();
             Console.CancelKeyPress +=  (_, __) => OnProcessExit();
-            Journal.Log($"[!] Process started at {DateTime.Now.ToString()}");
-            Storage.Initialize();
+            Journal.Log($"[!] Process started at {startTime.ToString()}", echoTelegram: false);
+
+            TelegramBot.Send
+            (
+                text: $"Process started at {startTime}",
+                options: new TelegramBot.InlineKeyboard
+                (
+                    ("Terminate", _ =>
+                    {
+                        TelegramBot.Send($"Process terminated at {DateTime.Now}");
+                        TelegramBot.RemoveOldInlineKeyboards();
+                        Environment.Exit(0);
+                    })
+                )
+            );
 
             try
             {
@@ -55,7 +77,8 @@ namespace CryptoBot
 
         public static void OnProcessExit()
         {
-            Journal.Log($"[!] Process exited at {DateTime.Now.ToString()}");
+            TelegramBot.RemoveOldInlineKeyboards();
+            Journal.Log($"[!] Process terminated at {DateTime.Now}", echoTelegram: false);
             Journal.Log($"\n{new string('#', 128)}\n");
         }
 
@@ -65,35 +88,33 @@ namespace CryptoBot
             (
                 exchanges: new Exchange[]
                 {
-                    new CoinbasePro(),
-                    // new Gemini(),
-                    // new Binance()
-                }
+                    new Binance()
+                },
+                currencies: new Currency[]
+                {
+                    Currency.USDT
+                },
+                filter: CurrencyFilter.Either
             );
             
             await Network.Connect();
 
             OnExchangeNetworkConnected();
-
-            // Console.Clear();
-            // var scriptPath = "/CryptoBot/src/TradingStrategyLanguage/Scripts/renko.tsl";
-            // var tslScript = File.ReadAllText(Path.Join(Environment.CurrentDirectory, scriptPath));
-            // (new TSLTranspiler()).Transpile(tslScript);
         }
 
         public static void OnExchangeNetworkConnected()
         {
-            var btcusd = Network
-                .GetExchange("Coinbase Pro")
-                .GetMarket(new CurrencyPair(Currency.BTC, Currency.USD));
+            Network.Indicators.Use.MACD(DebugConst.Timescale);
+            // Network.Indicators.Use.RSI(DebugConst.Timescale);
 
-            // var rsi = new RelativeStrengthIndex(TradingPeriod.Field.Close, btcusd.TradingPeriods);
-
-            // TcpServer server = new TcpServer(IPAddress.Loopback, 8008);
-            // server.Start(Network);
-
-            // var cointegrator = new Cointegrator(Network);
             // var pathfinder = new Pathfinder(Network);
+            // pathfinder.Start();
+
+            InfluxStorage.ScrapeHistory
+            (
+                exchange: Network.GetExchange("Binance"),
+                pair: new CurrencyPair(Currency.BTC, Currency.USDT)
+            );
         }
     }
 }
