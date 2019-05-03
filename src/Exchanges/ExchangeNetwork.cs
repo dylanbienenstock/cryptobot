@@ -196,7 +196,7 @@ namespace CryptoBot.Exchanges
 
         private async void FetchHistoricTrades(int periodDuration = 60000, int periodCount = 512, int maxBackoffs = 5)
         {
-            if (Program.Options.NoHistory || true) return;
+            if (Program.Options.NoHistory) return;
 
             var currentMilliseconds = (DateTime.UtcNow - DateTime.UnixEpoch).TotalMilliseconds;
             var firstPeriodMilliseconds = Math.Ceiling(currentMilliseconds / periodDuration) * periodDuration;
@@ -275,14 +275,22 @@ namespace CryptoBot.Exchanges
             WriteCheckmark();
         }
 
-        private void RecordOrder(CurrencyOrder order) =>
-            order.Exchange.GetMarket(order.Pair).RecordOrder(order);
+        private void RecordOrder(CurrencyOrder order)
+        {
+            var market = order.Exchange.GetMarket(order.Pair);
+            market.RecordOrder(order);
+
+            if (Program.Options.Record)
+                Storage.RecordOrder(market, order);
+        }
 
         private void RecordTrade(CurrencyTrade trade)
         {
             var market = trade.Exchange.GetMarket(trade.Pair);
             market.RecordTrade(trade);
-            Storage.RecordTrade(market, trade);
+
+            if (Program.Options.Record)
+                Storage.RecordTrade(market, trade);
         }
 
         private void BufferOrRecordTrade(CurrencyTrade trade)
