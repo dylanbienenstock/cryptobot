@@ -18,10 +18,12 @@ namespace CryptoBot.Indicators
         public bool Complete => Source.Complete;
         private MovingAverage _movingAverage;
 
-        public AverageTrueRange(TradingPeriodSeries series, Smoothing smoothing = Smoothing.Simple) : base(series.Values)
+        public AverageTrueRange(Smoothing smoothing = Smoothing.Simple)
         {
-            _movingAverage = new MovingAverage(smoothing, series.Periods);
+            
         }
+
+        public override void OnPreAdd(StatisticalSeriesNode<TradingPeriod> node) { }
 
         public override void OnPostAdd(StatisticalSeriesNode<TradingPeriod> node) =>
             _movingAverage.Add(node.GetTrueRange());

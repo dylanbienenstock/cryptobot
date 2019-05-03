@@ -17,8 +17,10 @@ namespace CryptoBot.Indicators
         public decimal Value => _movingAverage.Average;
         public MovingAverage _movingAverage;
 
-        public SimpleMovingAverage(StatisticalSeries<decimal> series) : base(series) => 
+        public SimpleMovingAverage(StatisticalSeries<decimal> series) => 
             _movingAverage = new MovingAverage(Smoothing.Simple, 0);
+
+        public override void OnPreAdd(StatisticalSeriesNode<decimal> node) { }
 
         public override void OnPostAdd(StatisticalSeriesNode<decimal> node) => 
             _movingAverage.Add(node.Value);

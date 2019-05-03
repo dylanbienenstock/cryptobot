@@ -5,11 +5,11 @@ namespace CryptoBot.Indicators
 {
     public static class TradingPeriodMetrics
     {
-        public static decimal GetChangePercentage(this StatisticalSeriesNode<TradingPeriod> node, TradingPeriod.Field sourceField)
+        public static decimal GetChangePercentage(this StatisticalSeriesNode<TradingPeriod> node, TradingPeriodAspect aspect)
         {
             if (node.Previous == null) return 0;
-            decimal currentPrice = node.Value.Get(sourceField);
-            decimal previousPrice = node.Previous.Value.Get(sourceField);
+            decimal currentPrice = node.Value.Get(aspect);
+            decimal previousPrice = node.Previous.Value.Get(aspect);
             return (currentPrice - previousPrice) / previousPrice;
         } 
 
