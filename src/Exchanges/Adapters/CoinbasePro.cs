@@ -160,10 +160,10 @@ namespace CryptoBot.Exchanges.Adapters
         /// How many trading periods to pull
         /// </param>
         /// <returns></returns>
-        public override async Task<ExchangeTradeHistory> FetchTradeHistory(string symbol, double startTime, int periodDuration, int count)
+        public override async Task<List<HistoricalTradingPeriod>> FetchHistoricalTradingPeriods(string symbol, double startTime, int periodDuration, int count)
         {
             // A maximum of 300 periods can be requested at one time
-            var allPeriods = new List<TradingPeriod>();
+            var allPeriods = new List<HistoricalTradingPeriod>();
             int requestCount = (int)Math.Ceiling(count / 300f);
             int backoffs = 0;
 
@@ -212,15 +212,8 @@ namespace CryptoBot.Exchanges.Adapters
                         if (response == null) throw lastException;
 
                         var responseBody = await response.Content.ReadAsStringAsync();
-                        var rawPeriods = JsonConvert.DeserializeObject<decimal[][]>((string)responseBody);
-                        var periods = rawPeriods.Select(rawPeriod => new TradingPeriod
-                        {
-                            Time  = DateTime.UnixEpoch.AddSeconds((double)rawPeriod[0] /* - periodDuration / 1000 */),
-                            Low   = rawPeriod[1],
-                            High  = rawPeriod[2],
-                            Open  = rawPeriod[3],
-                            Close = rawPeriod[4]
-                        });
+                        var candles = JsonConvert.DeserializeObject<decimal[][]>((string)responseBody);
+                        var periods = candles.Select(candle => new HistoricalTradingPeriod(candle));
 
                         allPeriods.AddRange(periods);
                         backoffs = Math.Max(backoffs - 1, 0);
@@ -236,14 +229,7 @@ namespace CryptoBot.Exchanges.Adapters
                 if (response == null) throw lastException;
             }
 
-            return new ExchangeTradeHistory
-            (
-                market => allPeriods
-                    .Distinct()
-                    .OrderBy(period => period.Time)
-                    .ToList()
-                    .ForEach(period => market.TradingPeriods.Add(period))
-            );
+            return allPeriods;
         }
 
         private IDisposable OnOrderStreamSub(IObserver<CurrencyOrder> observer)
