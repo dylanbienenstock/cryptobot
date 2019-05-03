@@ -285,10 +285,7 @@ namespace CryptoBot.Exchanges.Adapters
             });
         }
 
-        public override string[] SplitSymbol(string pair)
-        {
-            return pair.Split("-");
-        }
+        public override string[] SplitSymbol(string pair) => pair.Split("-");
 
         private void EmitOrder(string symbol, OrderSide side, decimal price, decimal amount, DateTime time)
         {
