@@ -15,6 +15,18 @@ namespace CryptoBot.Exchanges.Currencies
         public decimal      Amount;
         public DateTime     Time;
 
+        private Market _market;
+        public Market Market
+        {
+            get
+            {
+                if (_market == null)
+                    _market = Exchange.GetMarket(Pair);
+
+                return _market;
+            }
+        }
+
         public CurrencyTrade
         (
             Exchange  exchange,
