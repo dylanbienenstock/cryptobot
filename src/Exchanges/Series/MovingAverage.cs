@@ -23,6 +23,8 @@ namespace CryptoBot.Series
         private decimal _alpha;
         private bool _empty;
 
+        public bool Complete => _count >= _periods;
+
         public MovingAverage(Smoothing type, int periods)
         {
             Type = type;
