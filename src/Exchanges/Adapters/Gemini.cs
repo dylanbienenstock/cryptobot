@@ -87,7 +87,7 @@ namespace CryptoBot.Exchanges.Adapters
             return symbols;
         }
 
-        public override Task<ExchangeTradeHistory> FetchTradeHistory(string symbol, double startTime, int periodDuration, int count)
+        public override Task<List<HistoricalTradingPeriod>> FetchHistoricalTradingPeriods(string symbol, double startTime, int periodDuration, int count)
         {
             throw new NotImplementedException();
         }
@@ -152,6 +152,11 @@ namespace CryptoBot.Exchanges.Adapters
             {
                 EmitOrder(symbol, change.Side, change.Price, change.Amount, message.Time);
             }
+        }
+
+        public override Task<DateTime> FetchPairListingDate(CurrencyPair pair)
+        {
+            throw new NotImplementedException();
         }
     }
 }
