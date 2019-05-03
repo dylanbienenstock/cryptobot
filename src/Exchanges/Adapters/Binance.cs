@@ -13,14 +13,6 @@ using CryptoBot.Indicators;
 
 namespace CryptoBot.Exchanges
 {
-    using B_OrderFeed     = WebSocketFeed<Binance.B_AggUpdate>;
-    using B_Observable    = IObservable<CurrencyOrder>;
-    using B_Observer      = IObserver<CurrencyOrder>;
-    using B_ObserverList  = List<IObserver<CurrencyOrder>>;
-    using B_SnapshotDict  = Dictionary<string, Binance.B_Snapshot>;
-    using B_UpdateBuffer  = Dictionary<string, List<Binance.B_Update>>;
-    using B_SymbolDict    = Dictionary<string, string[]>;
-
     public class Binance : Exchange
     {
         public struct B_Symbol
@@ -51,15 +43,6 @@ namespace CryptoBot.Exchanges
 
             [JsonProperty("asks")]
             public decimal[][] Asks;
-        }
-
-        public struct B_AggUpdate
-        {
-            [JsonProperty("stream")]
-            public string StreamName;
-
-            [JsonProperty("data")]
-            public B_Update Data;
         }
 
         public struct B_Update
