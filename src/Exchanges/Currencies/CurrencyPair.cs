@@ -31,6 +31,12 @@ namespace CryptoBot.Exchanges.Currencies
             Quote = ParseQuote(splitSymbol[1]);
         }
 
+        public static CurrencyPair FromGenericSymbol(string symbol)
+        {
+            string[] splitSymbol = symbol.Split('/');
+            return new CurrencyPair(splitSymbol[0], splitSymbol[1]);
+        }
+
         private static Currency ParseBase(string _base)
         {
             if (!Enum.TryParse(_base, true, out Currency parsed))
