@@ -47,7 +47,7 @@ namespace CryptoBot.Exchanges.Currencies
             return parsed;
         }
 
-        public override string ToString()
+        public string ToGenericSymbol()
         {
             return Enum.GetName(typeof(Currency), Base) + '/' +
                    Enum.GetName(typeof(Currency), Quote);

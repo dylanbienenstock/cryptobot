@@ -156,7 +156,7 @@ namespace CryptoBot.Indicators
             var note       = Notes[indicator];
             var readout    = GetFormattedOutputValues(indicator);
             var signalName = Indicator.SignalToString(signal);
-            var message    = $"\\[{indicator.Name}] *{indicator.Market.Pair.ToString()}* {signalName} \n\n*{note}* {readout}";
+            var message    = $"\\[{indicator.Name}] *{indicator.Market.Pair.ToGenericSymbol()}* {signalName} \n\n*{note}* {readout}";
 
             var renderContext = new IndicatorRenderContext
             (

@@ -62,7 +62,7 @@ namespace CryptoBot.Arbitrage
                         foreach (var awayMarket in awayExchange.Markets.Values)
                         {
                             if (homeMarket == awayMarket) continue;
-                            if (homeMarket.Pair.ToString() != awayMarket.Pair.ToString()) continue;
+                            if (homeMarket.Pair.ToGenericSymbol() != awayMarket.Pair.ToGenericSymbol()) continue;
 
                             _edges.Add(new CointegrableEdge(homeMarket, awayMarket));
                         }   
@@ -103,7 +103,7 @@ namespace CryptoBot.Arbitrage
                 Journal.Log("\nCointegration arbitrage opportunity found at (DateTime.Now.ToString())");
                 Journal.Log(String.Format(
                     "[{0}] {1} @ {2} --> {3} @ {4} ==> {5}",
-                    edge.Home.Pair.ToString(),
+                    edge.Home.Pair.ToGenericSymbol(),
                     edge.Home.Exchange.Name,
                     edge.Home.Orders.BestBid,
                     edge.Away.Exchange.Name,
