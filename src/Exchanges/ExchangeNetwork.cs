@@ -194,40 +194,40 @@ namespace CryptoBot.Exchanges
             throw exception;
         }
 
-        private async void FetchHistoricTrades(int periodDuration = 60000, int periodCount = 512, int maxBackoffs = 5)
+        private void FetchHistoricTrades(int periodDuration = 60000, int periodCount = 512, int maxBackoffs = 5)
         {
-            if (Program.Options.NoHistory) return;
+            // ! TODO: REPLACE THIS WITH SOMETHING BETTER (PULL FROM DB?)
+            // var currentMilliseconds = (DateTime.UtcNow - DateTime.UnixEpoch).TotalMilliseconds;
+            // var firstPeriodMilliseconds = Math.Ceiling(currentMilliseconds / periodDuration) * periodDuration;
+            // var waitMilliseconds = Math.Ceiling(firstPeriodMilliseconds - currentMilliseconds);
 
-            var currentMilliseconds = (DateTime.UtcNow - DateTime.UnixEpoch).TotalMilliseconds;
-            var firstPeriodMilliseconds = Math.Ceiling(currentMilliseconds / periodDuration) * periodDuration;
-            var waitMilliseconds = Math.Ceiling(firstPeriodMilliseconds - currentMilliseconds);
+            // Console.Write($"Waiting {(int)Math.Floor(waitMilliseconds / 1000)} seconds to fetch historical trades... ");
+            // await Task.Delay((int)waitMilliseconds);
+            // WriteCheckmark(ConsoleColor.Red);
 
-            Console.Write($"Waiting {(int)Math.Floor(waitMilliseconds / 1000)} seconds to fetch historical trades... ");
-            await Task.Delay((int)waitMilliseconds);
-            WriteCheckmark(ConsoleColor.Red);
+            // foreach (var exchange in Exchanges)
+            // {
+            //     Console.Write($"[{exchange.Name}] Fetching historical rates... ");
 
-            foreach (var exchange in Exchanges)
-            {
-                Console.Write($"[{exchange.Name}] Fetching historical rates... ");
+            //     foreach (var market in exchange.Markets.Values)
+            //     {
+            //         var periods = await exchange.FetchHistoricalTradingPeriods
+            //         (
+            //             symbol: market.Symbol,
+            //             startTime: firstPeriodMilliseconds,
+            //             periodDuration: periodDuration,
+            //             count: periodCount
+            //         );
 
-                foreach (var market in exchange.Markets.Values)
-                {
-                    var periods = await exchange.FetchHistoricalTradingPeriods
-                    (
-                        symbol: market.Symbol,
-                        startTime: firstPeriodMilliseconds,
-                        periodDuration: periodDuration,
-                        count: periodCount
-                    );
+            //         Indicators.AddHistoricalTradingPeriods(market, periods);
+            //         PlaybackBufferedTrades(market);
 
-                    Indicators.AddHistoricalTradingPeriods(market, periods);
-                    PlaybackBufferedTrades(market);
+            //         market.UpToDate = true;
+            //     }
 
-                    market.UpToDate = true;
-                }
-
-                WriteCheckmark(ConsoleColor.Yellow);
-            }
+            //     WriteCheckmark(ConsoleColor.Yellow);
+            // }
+            // ! SERIOUSLY THIS IS IMPORTANT
         }
 
         private void PlaybackBufferedTrades(Market market)
@@ -260,9 +260,8 @@ namespace CryptoBot.Exchanges
             MergedOrderStream.Subscribe(o => RecordOrder(o));
 
             MergedTradeStream = Observable.Merge(TradeStreams);
-            _mergedTradeStreamSubscription = (Program.Options.NoHistory || true)
-                ? MergedTradeStream.Subscribe(t => RecordTrade(t))
-                : MergedTradeStream.Subscribe(t => BufferOrRecordTrade(t));
+            _mergedTradeStreamSubscription =
+                MergedTradeStream.Subscribe(t => RecordTrade(t));
                 
             foreach (var exchange in Exchanges) 
             {
@@ -279,18 +278,12 @@ namespace CryptoBot.Exchanges
         {
             var market = order.Exchange.GetMarket(order.Pair);
             market.RecordOrder(order);
-
-            if (Program.Options.Record)
-                Storage.RecordOrder(market, order);
         }
 
         private void RecordTrade(CurrencyTrade trade)
         {
             var market = trade.Exchange.GetMarket(trade.Pair);
             market.RecordTrade(trade);
-
-            if (Program.Options.Record)
-                Storage.RecordTrade(market, trade);
         }
 
         private void BufferOrRecordTrade(CurrencyTrade trade)
@@ -310,8 +303,14 @@ namespace CryptoBot.Exchanges
         }
 
         public Exchange GetExchange(string name) => Exchanges.First(e => e.Name == name);
+
         public Market GetMarket(Exchange exchange, CurrencyPair pair) => exchange.GetMarket(pair);
-        public Market GetMarket(Exchange exchange, string symbol) => exchange.GetMarket(symbol);
+        public Market GetMarket(Exchange exchange, string symbol)     => exchange.GetMarket(symbol);
+        public Market GetMarket(string name, string symbol)           => GetExchange(name).GetMarket(symbol);
+        public Market GetMarket(string name, CurrencyPair pair)       => GetExchange(name).GetMarket(pair);
+        public Market GetMarket(string name, string symbol, bool generic) =>
+            generic ? GetExchange(name).GetMarket(CurrencyPair.FromGenericSymbol(symbol))
+                    : GetExchange(name).GetMarket(symbol);
 
         /// <summary>
         /// Retrieves an <c>OrderBook</c> based on the given <c>Exchange</c> and <c>CurrencyPair</c>
