@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using CryptoBot.Exchanges.Currencies;
 using CryptoBot.Exchanges.Orders;
 using CryptoBot.Exchanges.Series;
@@ -33,5 +34,8 @@ namespace CryptoBot.Exchanges
 
         public void RecordTrade(CurrencyTrade trade) => Trades.Record(trade);
         public void RecordOrder(CurrencyOrder order) => Orders.Record(order);
+
+        public Task<HistoricalTradingPeriod> GetFirstHistoricalTradingPeriod() =>
+            Exchange.GetFirstHistoricalTradingPeriod(Pair);
     }
 }

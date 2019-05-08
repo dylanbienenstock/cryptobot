@@ -30,7 +30,7 @@ namespace CryptoBot.Exchanges
 
         public abstract Task<List<string>> FetchSymbols();
         public abstract Task<List<HistoricalTradingPeriod>> FetchHistoricalTradingPeriods(string symbol, double startTime, int periodDuration, int count);
-        public abstract Task<DateTime> FetchPairListingDate(CurrencyPair pair);
+        public abstract Task<HistoricalTradingPeriod> GetFirstHistoricalTradingPeriod(CurrencyPair pair);
         public abstract void Connect(List<string> symbols);
         public abstract string[] SplitSymbol(string symbol);
 

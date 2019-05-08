@@ -176,6 +176,7 @@ namespace CryptoBot.Exchanges
         {
             if (count > 1000) throw new Exception("Cannot fetch more than 1000 candles");
 
+            var pair = new CurrencyPair(this, symbol);
             var intervalName = GetIntervalName(interval);
             var tradingPeriods = (await _httpClient.Get<decimal[][]>
             (
@@ -194,10 +195,10 @@ namespace CryptoBot.Exchanges
             return tradingPeriods;
         }
 
-        public override async Task<DateTime> FetchPairListingDate(CurrencyPair pair)
+        public override async Task<HistoricalTradingPeriod> GetFirstHistoricalTradingPeriod(CurrencyPair pair)
         {
             string symbol = CurrencyPairToSymbol(pair);
-            return (await FetchHistoricalTradingPeriods(symbol, 0, 60000, 1))[0].Time;
+            return (await FetchHistoricalTradingPeriods(symbol, 0, 60000, 1))[0];
         }
 
         public string CurrencyPairToSymbol(CurrencyPair pair) =>

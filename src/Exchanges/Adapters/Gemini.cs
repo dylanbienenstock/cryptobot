@@ -154,7 +154,7 @@ namespace CryptoBot.Exchanges.Adapters
             }
         }
 
-        public override Task<DateTime> FetchPairListingDate(CurrencyPair pair)
+        public override Task<HistoricalTradingPeriod> GetFirstHistoricalTradingPeriod(CurrencyPair pair)
         {
             throw new NotImplementedException();
         }

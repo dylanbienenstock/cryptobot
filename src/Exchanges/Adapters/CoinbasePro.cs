@@ -211,6 +211,7 @@ namespace CryptoBot.Exchanges.Adapters
 
                         if (response == null) throw lastException;
 
+                        var pair = new CurrencyPair(this, symbol);
                         var responseBody = await response.Content.ReadAsStringAsync();
                         var candles = JsonConvert.DeserializeObject<decimal[][]>((string)responseBody);
                         var periods = candles.Select(candle => new HistoricalTradingPeriod(candle));
@@ -413,7 +414,7 @@ namespace CryptoBot.Exchanges.Adapters
             }
         }
 
-        public override Task<DateTime> FetchPairListingDate(CurrencyPair pair)
+        public override Task<HistoricalTradingPeriod> GetFirstHistoricalTradingPeriod(CurrencyPair pair)
         {
             throw new NotImplementedException();
         }
