@@ -1,18 +1,36 @@
 using System;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace CryptoBot.Indicators
 {
     public class TradingPeriod
     {
-        public DateTime Time;
-        public decimal  Open;
-        public decimal  High;
-        public decimal  Low;
-        public decimal  Close;
-        public decimal  Volume;
-        public bool     Finished;
+        [Required]
+        public DateTime Time { get; set; }
 
+        [Required]
+        public decimal Open { get; set; }
+
+        [Required]
+        public decimal High { get; set; }
+                
+        [Required]
+        public decimal Low { get; set; }
+                
+        [Required]
+        public decimal Close { get; set; }
+                
+        [Required]
+        public decimal Volume { get; set; }
+
+        [NotMapped]
+        public bool Finished;
+
+        [NotMapped]
         public virtual bool Historical => false;
+
+        public TradingPeriod() { }
 
         public TradingPeriod
         (
