@@ -1,24 +1,78 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Dynamic;
+using System.Reactive.Subjects;
 using CryptoBot.Exchanges;
 using CryptoBot.Exchanges.Series;
 using CryptoBot.Indicators.Renderers;
+using CryptoBot.Scripting.Typings;
 
 namespace CryptoBot.Indicators
 {
+    [TypescriptDefine]
     public abstract class Indicator : TradingPeriodSeriesReader
     {
-        public readonly string Name;
+        public abstract IndicatorDetails Details { get; }
+        public string Id;
+        public string Name => Details.Name;
+        public IndicatorType Type => Details.Type;
+        public long TimeFrame;
+        [TypescriptIgnore]
+        public bool UpToDate;
+        [TypescriptIgnore]
+        public ExpandoObject Settings;
         public Market Market;
         public IndicatorManifold Manifold;
-        public List<decimal> Settings;
+        public IndicatorDataAggregate DataAggregate;
+        public TradingPeriodSeries Input;
+        public Subject<IndicatorOutput> Output;
 
-        public Indicator(string name, IndicatorManifold manifold)
+        public void Initialize(IndicatorManifold manifold, Market market, long timeFrame, ExpandoObject settings)
         {
-            Name = name;
-            Manifold = manifold;
+            Manifold      = manifold;
+            Market        = market;
+            TimeFrame     = timeFrame;
+            Settings      = settings;
+
+            Id            = Guid.NewGuid().ToString();
+            DataAggregate = new IndicatorDataAggregate(timeFrame);
+            Output        = new Subject<IndicatorOutput>();
+
+            Configure(settings);
         }
+
+        public IndicatorDataAggregate ProcessOutsideManifold(long timeFrame, List<HistoricalTradingPeriod> periods)
+        {
+            var manifold = new IndicatorManifold();
+            manifold.AddMarket(Market);
+            var clone = manifold.CreateRaw(Market, Name, timeFrame, Settings);
+
+            foreach (var field in clone.DataAggregate.Fields)
+                field.Value.Values.Duration = TimeSpan.FromMilliseconds((double)timeFrame * (double)periods.Count);
+
+            manifold.AddTradingPeriods(clone, periods);
+
+            return clone.DataAggregate;
+        }
+
+        [TypescriptIgnore]
+        public abstract void Configure(dynamic settings);
+
+        protected TradingPeriodSeries RequireInput(long timeFrame, int periods) =>
+            Manifold.RequireInput(this, timeFrame, periods);
+
+        protected void PrimaryOutputField(string name, IndicatorRenderer renderer = null) =>
+            DataAggregate.AddPrimaryField(name, renderer);
+
+        protected void OutputField(string name, IndicatorRenderer renderer = null) =>
+            DataAggregate.AddField(name, renderer);
+
+        protected void EmitSignal(IndicatorSignal signal, string note) =>
+            Manifold.OnSignal(this, signal, note);
+
+        protected void EmitNextValue(Dictionary<string, object> nextValue) =>
+            Manifold.OnNextValue(this, nextValue);
 
         public static string SignalToString(IndicatorSignal signal)
         { 
@@ -55,31 +109,5 @@ namespace CryptoBot.Indicators
 
             return IndicatorColor.Neutral;
         }
-        
-        public abstract void Configure(params dynamic[] settings);
-
-        protected TradingPeriodSeries Input(int periodDurationMilliseconds, int periods) =>
-            Manifold.RequireInput(this, periodDurationMilliseconds, periods);
-
-        protected void PeriodDuration(int milliseconds) =>
-            Manifold.RegisterPeriodDuration(this, milliseconds);
-
-        protected void PeriodDuration(decimal milliseconds) =>
-            PeriodDuration((int)milliseconds);
-
-        protected void PrimaryOutput(string name, IndicatorRenderer renderer) =>
-                Manifold.RegisterPrimaryOutput(this, name, renderer);
-
-        protected void Output(string name, IndicatorRenderer renderer) =>
-            Manifold.RegisterOutput(this, name, renderer);
-
-        protected void EmitSignal(IndicatorSignal signal, string note) =>
-            Manifold.OnSignal(this, signal, note);
-
-        protected void EmitNextValue(string name, float value) =>
-            Manifold.OnNextValue(this, name, value);
-
-        protected void EmitNextValue(string name, decimal value) =>
-            EmitNextValue(name, (float)value);
     }
 }

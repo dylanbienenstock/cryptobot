@@ -9,15 +9,15 @@ namespace CryptoBot.Indicators.Renderers
     public abstract class IndicatorRenderer
     {
         public readonly int           Order;
-        public IndicatorRenderContext Context        { get; private set; }
-        public IndicatorData          Data           { get; private set; }
-        public int                    PeriodDuration { get; private set; }
+        public IndicatorRenderContext Context   { get; private set; }
+        public IndicatorData          Data      { get; private set; }
+        public long                   TimeFrame { get; private set; }
 
-        public DateTime Now => Data.Values.TailTime.Quantize(Data.PeriodDuration);
+        public DateTime Now => Data.Values.TailTime.Quantize(Data.TimeFrame);
 
-        private float _scaleX => Context.Bounds.Width / Context.DataAggregate.Domain;
-        private float _min;
-        private float _scaleY;
+        private double _scaleX => Context.Bounds.Width / Context.DataAggregate.Domain;
+        private double _min;
+        private double _scaleY;
 
         public IndicatorRenderer(int order)
         {
@@ -26,13 +26,13 @@ namespace CryptoBot.Indicators.Renderers
 
         public virtual void Render() { }
 
-        public void SetRange((float min, float max) range)
+        public void SetRange((double min, double max) range)
         {
             _min = range.min;
             _scaleY = Context.Bounds.Height / (range.max - range.min);
         }
 
-        public virtual (float min, float max) GetRange() =>
+        public virtual (double min, double max) GetRange() =>
             (Context.DataAggregate.Min, Context.DataAggregate.Max);
 
         public static void Render(IndicatorRenderContext context, string fileName = null)
@@ -52,6 +52,8 @@ namespace CryptoBot.Indicators.Renderers
 
             foreach (var field in fields)
             {
+                if (field.Renderer == null) continue;
+
                 field.Renderer.Context = context;
                 field.Renderer.Data = field;
                 field.Renderer.SetRange(range);
@@ -63,25 +65,25 @@ namespace CryptoBot.Indicators.Renderers
             detailRenderer.Render();
         }
 
-        public DateTime GetTime(StatisticalSeriesNode<float> node) =>
-            Data.Values.GetTime(node).Quantize(Data.PeriodDuration);
+        public DateTime GetTime(StatisticalSeriesNode<object> node) =>
+            Data.Values.GetTime(node).Quantize(Data.TimeFrame);
 
-        public float GetMillisecondsAgo(DateTime time) => 
-            (float)(Now - time).TotalMilliseconds;
+        public double GetMillisecondsAgo(DateTime time) => 
+            (double)(Now - time).TotalMilliseconds;
 
-        public float GetMillisecondsAgo(StatisticalSeriesNode<float> node) => 
-            (float)(Now - GetTime(node)).TotalMilliseconds;
+        public double GetMillisecondsAgo(StatisticalSeriesNode<object> node) => 
+            (double)(Now - GetTime(node)).TotalMilliseconds;
 
-        public float MapX(float time)  => 
-            Context.Bounds.X + Context.Bounds.Width - time * _scaleX;
+        public double MapX(object time)  => 
+            Context.Bounds.X + Context.Bounds.Width - (double)time * _scaleX;
             
-        public float MapY(float value) => 
-            Context.OuterBounds.Height - (Context.Bounds.Y + (value - _min) * _scaleY);
+        public double MapY(object value) => 
+            Context.OuterBounds.Height - (Context.Bounds.Y + ((double)value - _min) * _scaleY);
         
-        public float MapX(StatisticalSeriesNode<float> node) => MapX(GetMillisecondsAgo(node));
-        public float MapY(StatisticalSeriesNode<float> node) => MapY(node.Value);
+        public double MapX(StatisticalSeriesNode<object> node) => MapX(GetMillisecondsAgo(node));
+        public double MapY(StatisticalSeriesNode<object> node) => MapY(node.Value);
 
-        public PointF MapXY(float time, float value)           => new PointF(MapX(time), MapY(value));
-        public PointF MapXY(StatisticalSeriesNode<float> node) => new PointF(MapX(node), MapY(node));
+        public PointF MapXY(object time, object value)           => new PointF((float)MapX(time), (float)MapY(value));
+        public PointF MapXY(StatisticalSeriesNode<object> node) => new PointF((float)MapX(node), (float)MapY(node));
     }
 }

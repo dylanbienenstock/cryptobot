@@ -5,7 +5,7 @@ namespace CryptoBot.Indicators
 {
     public static class TradingPeriodMetrics
     {
-        public static decimal GetChangePercentage(this StatisticalSeriesNode<TradingPeriod> node, TradingPeriodAspect aspect)
+        public static decimal GetChangePercentage(this StatisticalSeriesNode<TradingPeriod> node, string aspect)
         {
             if (node.Previous == null) return 0;
             decimal currentPrice = node.Value.Get(aspect);

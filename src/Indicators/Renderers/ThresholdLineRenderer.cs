@@ -9,11 +9,11 @@ namespace CryptoBot.Indicators.Renderers
 {
     public class ThresholdLineRenderer : IndicatorRenderer
     {
-        private float _min;
-        private float _low;
-        private float _high;
-        private float _max;
-        private float _width;
+        private double _min;
+        private double _low;
+        private double _high;
+        private double _max;
+        private double _width;
         private Color _highColor;
         private Color _neutralColor;
         private Color _lowColor;
@@ -21,11 +21,11 @@ namespace CryptoBot.Indicators.Renderers
         public ThresholdLineRenderer
         (
             int     order,
-            float[] levels,
+            double[] levels,
             Color   high,
             Color   neutral,
             Color   low,
-            float   width = 1.5f
+            double   width = 1.5f
         )
         : base(order)
         {
@@ -39,7 +39,7 @@ namespace CryptoBot.Indicators.Renderers
             _width        = width;
         }
 
-        public override (float min, float max) GetRange() => (_min, _max);
+        public override (double min, double max) GetRange() => (_min, _max);
 
         public override void Render()
         {
@@ -70,7 +70,7 @@ namespace CryptoBot.Indicators.Renderers
 
             using (var graphics = Graphics.FromImage(Context.Result))
             {
-                var thresholdPen = new Pen(Color.FromArgb(64, _neutralColor), _width);
+                var thresholdPen = new Pen(Color.FromArgb(64, _neutralColor), (float)_width);
                 thresholdPen.DashStyle = DashStyle.Dash;
 
                 graphics.SmoothingMode = SmoothingMode.HighQuality;
@@ -84,7 +84,7 @@ namespace CryptoBot.Indicators.Renderers
                     using (var subgraphics = Graphics.FromImage(subrender))
                     {
                         subgraphics.SmoothingMode = SmoothingMode.HighQuality;
-                        subgraphics.DrawLines(new Pen(colors[i], _width), points);
+                        subgraphics.DrawLines(new Pen(colors[i], (float)_width), points);
                     }
 
                     graphics.DrawImage(subrender, clipRects[i], clipRects[i], GraphicsUnit.Pixel);

@@ -9,28 +9,33 @@ namespace CryptoBot.Indicators
     {
         public CapacitySeries<TradingPeriod> Values;
         public readonly int Periods;
-        private double _periodDurationMilliseconds;
+        private long _timeFrame;
         private DateTime _currentPeriodStart;
         private DateTime _nextPeriodStart;
+        private object _lockObj;
 
-        public TradingPeriodSeries(TimeSeries<CurrencyTrade> timeseries, int periodDurationMilliseconds, int periods)
+        public TradingPeriodSeries(TimeSeries<CurrencyTrade> timeseries, long timeFrame, int periods)
         {
             Values = new CapacitySeries<TradingPeriod>(periods);
             Periods = periods;
-            _periodDurationMilliseconds = periodDurationMilliseconds;
+            _timeFrame = timeFrame;
+            _lockObj = new object();
 
             BindTo(timeseries);
         }
 
         public override void OnPostAdd(StatisticalSeriesNode<CurrencyTrade> node)
         {
-            var quantizedMilliseconds = node.Value.Time.GetQuantizedMilliseconds(_periodDurationMilliseconds);
+            var quantizedMilliseconds = node.Value.Time.GetQuantizedMilliseconds(_timeFrame);
             var quantizedTime = (DateTime.UnixEpoch).AddMilliseconds(quantizedMilliseconds);
 
-            if (Values.Head == null || AfterCurrentPeriod(quantizedTime))
-                CreateNewPeriod(node, quantizedMilliseconds, quantizedTime);
-            else if (WithinCurrentPeriod(quantizedTime))
-                UpdateCurrentPeriod(node, quantizedTime);
+            lock (_lockObj)
+            {
+                if (Values.Head == null || AfterCurrentPeriod(quantizedTime))
+                    CreateNewPeriod(node, quantizedMilliseconds, quantizedTime);
+                else if (WithinCurrentPeriod(quantizedTime))
+                    UpdateCurrentPeriod(node, quantizedTime);
+            }
         }
 
         public override void OnPostRemove(StatisticalSeriesNode<CurrencyTrade> node) { }
@@ -42,9 +47,8 @@ namespace CryptoBot.Indicators
         public void Add(TradingPeriod period)
         {
             var nodeMilliseconds = (period.Time - DateTime.UnixEpoch).TotalMilliseconds;
-            var quantizedMilliseconds = Math.Floor(nodeMilliseconds / _periodDurationMilliseconds)
-                * _periodDurationMilliseconds;
-            var quantizedTime = DateTime.UnixEpoch.AddMilliseconds(quantizedMilliseconds);
+            var quantizedMillis = period.Time.GetQuantizedMilliseconds(_timeFrame);
+            var quantizedTime = DateTime.UnixEpoch.AddMilliseconds(quantizedMillis);
 
             if (Values.Tail != null)
             {
@@ -52,6 +56,8 @@ namespace CryptoBot.Indicators
 
                 if (quantizedTime == lastPeriod.Time)
                 {
+                    Console.WriteLine("DUPLICATE!");
+
                     Values.UpdateTail
                     (
                         new TradingPeriod
@@ -69,7 +75,7 @@ namespace CryptoBot.Indicators
                 }
             }
 
-            FillGaps(quantizedMilliseconds, true);
+            FillGaps(quantizedMillis, true);
             Values.Record(period);
         }
 
@@ -79,24 +85,24 @@ namespace CryptoBot.Indicators
             {
                 var previousPeriodEndMilliseconds = 
                     (Values.Tail.Value.Time - DateTime.UnixEpoch).TotalMilliseconds
-                    + _periodDurationMilliseconds;
+                    + _timeFrame;
 
                 var gaps = (previousPeriodEndMilliseconds - nextPeriodMilliseconds)
-                    / _periodDurationMilliseconds;
+                    / _timeFrame;
 
                 for (int i = 0; i < gaps; i++)
-                {   
+                {
                     var fillPeriodTime = Values.Tail.Value.Time
-                        .AddMilliseconds(_periodDurationMilliseconds);
+                        .AddMilliseconds(_timeFrame);
 
                     var fillPeriod = new TradingPeriod
                     (
                         time:   fillPeriodTime,
-                        open:   Values.Tail.Value.Open,
-                        high:   Values.Tail.Value.High,
-                        low:    Values.Tail.Value.Low,
+                        open:   Values.Tail.Value.Close,
+                        high:   Values.Tail.Value.Close,
+                        low:    Values.Tail.Value.Close,
                         close:  Values.Tail.Value.Close,
-                        volume: Values.Tail.Value.Volume
+                        volume: 0
                     );
 
                     fillPeriod.Finished = true;
@@ -111,10 +117,10 @@ namespace CryptoBot.Indicators
             Values.Tail.Value.Finished = true;
         }
 
-        private void CreateNewPeriod(StatisticalSeriesNode<CurrencyTrade> node, double quantizedMilliseconds, DateTime quantizedTime)
+        private void CreateNewPeriod(StatisticalSeriesNode<CurrencyTrade> node, double quantizedMillis, DateTime quantizedTime)
         {
             OnPeriodClose();
-            FillGaps(quantizedMilliseconds);
+            FillGaps(quantizedMillis);
 
             Values.Record(
                 new TradingPeriod
@@ -129,7 +135,7 @@ namespace CryptoBot.Indicators
             );
 
             _currentPeriodStart = quantizedTime;
-            _nextPeriodStart = _currentPeriodStart.AddMilliseconds(_periodDurationMilliseconds);
+            _nextPeriodStart = _currentPeriodStart.AddMilliseconds(_timeFrame);
         }
 
         private void UpdateCurrentPeriod(StatisticalSeriesNode<CurrencyTrade> node, DateTime quantizedTime)
@@ -147,10 +153,9 @@ namespace CryptoBot.Indicators
             );
         }
 
-        private bool WithinCurrentPeriod(DateTime quantizedTime) => 
-            quantizedTime >= _currentPeriodStart && quantizedTime < _nextPeriodStart;
+        private bool WithinCurrentPeriod(DateTime time) => 
+            time >= _currentPeriodStart && time < _nextPeriodStart;
 
-        private bool AfterCurrentPeriod(DateTime quantizedTime) => 
-            quantizedTime >= _nextPeriodStart;
+        private bool AfterCurrentPeriod(DateTime time) => time >= _nextPeriodStart;
     }
 }

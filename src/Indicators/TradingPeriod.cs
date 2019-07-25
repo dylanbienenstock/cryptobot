@@ -76,14 +76,14 @@ namespace CryptoBot.Indicators
             Volume = buckets[5];
         }
 
-        public decimal Get(TradingPeriodAspect aspect)
+        public decimal Get(string aspect)
         {
             switch (aspect)
             {
-                case TradingPeriodAspect.Open:  return Open;
-                case TradingPeriodAspect.High:  return High;
-                case TradingPeriodAspect.Low:   return Low;
-                case TradingPeriodAspect.Close: return Close;
+                case "Open":  return Open;
+                case "High":  return High;
+                case "Low":   return Low;
+                case "Close": return Close;
             }
 
             throw new Exception();

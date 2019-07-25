@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Dynamic;
 using System.Threading;
 using CryptoBot.Exchanges.Currencies;
 using CryptoBot.Exchanges.Series;
@@ -23,31 +24,9 @@ namespace CryptoBot.Indicators
 {
     using Node = StatisticalSeriesNode<TradingPeriod>;
 
-    public static class MACDFactory
-    {
-        public static IndicatorMultiInstance<MovingAverageConvergenceDivergence> MACD
-        (
-            this IndicatorFactory factory,
-            int periodDuration = IndicatorDefaults.PeriodDuration,
-            int fastPeriods = 12,
-            int slowPeriods = 26,
-            int signalPeriods = 9,
-            TradingPeriodAspect aspect = IndicatorDefaults.Aspect
-        ) {
-            return factory.CreateRaw<MovingAverageConvergenceDivergence>
-            (
-                periodDuration,
-                fastPeriods,
-                slowPeriods,
-                signalPeriods,
-                aspect
-            );
-        }
-    }
-
     public class MovingAverageConvergenceDivergence : Indicator
     {
-        private TradingPeriodAspect _aspect;
+        private string _aspect;
         private MovingAverage _fast;
         private MovingAverage _slow;
         private MovingAverage _signal;
@@ -59,19 +38,50 @@ namespace CryptoBot.Indicators
         private decimal _macd => _fast.Average - _slow.Average;
         private decimal _macdHistogram => _macd - _signal.Average;
 
-        public MovingAverageConvergenceDivergence(IndicatorManifold manifold) : base("MACD", manifold) { }
+        public MovingAverageConvergenceDivergence() { }
 
-        public override void Configure(params dynamic[] settings)
+        public override IndicatorDetails Details => new IndicatorDetails
+        (
+            name:       "Moving Average Convergence Divergence",
+            oscillator: true,
+            lagging:    true,
+            type:       IndicatorType.Trend,
+            settings:   new []
+            {
+                new IndicatorSetting
+                (
+                    key: "FastPeriods",
+                    name: "Fast Periods",
+                    type: IndicatorSettingType.Int,
+                    defaultValue: 12
+                ),
+                new IndicatorSetting
+                (
+                    key: "SlowPeriods",
+                    name: "Slow Periods",
+                    type: IndicatorSettingType.Int,
+                    defaultValue: 26
+                ),
+                new IndicatorSetting
+                (
+                    key: "SignalPeriods",
+                    name: "Signal Periods",
+                    type: IndicatorSettingType.Int,
+                    defaultValue: 9
+                ),
+                new IndicatorSetting
+                (
+                    key: "Aspect",
+                    name: "Source",
+                    type: IndicatorSettingType.Aspect,
+                    defaultValue: "Close"
+                )
+            }
+        );
+
+        public override void Configure(dynamic settings)
         {
-            int periodDuration         = settings[0];
-            int fastPeriods            = settings[1];
-            int slowPeriods            = settings[2];
-            int signalPeriods          = settings[3];
-            TradingPeriodAspect aspect = settings[4];
-
-            PeriodDuration(periodDuration);
-
-            Output
+            OutputField
             (
                 name: "MACD",
                 renderer: new LineRenderer
@@ -81,7 +91,7 @@ namespace CryptoBot.Indicators
                 )
             );
 
-            Output
+            OutputField
             (
                 name: "Signal",
                 renderer: new LineRenderer
@@ -91,7 +101,7 @@ namespace CryptoBot.Indicators
                 )
             );
 
-            PrimaryOutput
+            PrimaryOutputField
             (
                 name: "Histogram",
                 renderer: new HistogramRenderer
@@ -103,13 +113,13 @@ namespace CryptoBot.Indicators
                 )
             );
 
-            var series = Input(periodDuration, fastPeriods);
+            var series = RequireInput(TimeFrame, settings.FastPeriods);
             BindTo(series.Values);
 
-            _aspect = aspect;
-            _fast   = new MovingAverage(Smoothing.Exponential, fastPeriods);
-            _slow   = new MovingAverage(Smoothing.Exponential, slowPeriods);
-            _signal = new MovingAverage(Smoothing.Exponential, signalPeriods);
+            _aspect = settings.Aspect;
+            _fast   = new MovingAverage(Smoothing.Exponential, settings.FastPeriods);
+            _slow   = new MovingAverage(Smoothing.Exponential, settings.SlowPeriods);
+            _signal = new MovingAverage(Smoothing.Exponential, settings.SignalPeriods);
         }
 
         public override void OnFinalizeRecord(Node node)
@@ -122,9 +132,12 @@ namespace CryptoBot.Indicators
 
         public override void OnTradingPeriodClose(Node node)
         {
-            EmitNextValue("MACD", _macd);
-            EmitNextValue("Signal", _signal.Average);
-            EmitNextValue("Histogram", Value);
+            EmitNextValue(new Dictionary<string, object>()
+            {
+                { "MACD",      _macd           },
+                { "Signal",    _signal.Average },
+                { "Histogram", Value           }
+            });
 
             if (_lastValue <= 0 && Value > 0)
                 EmitSignal(IndicatorSignal.Buy, $"Bullish Cross");
@@ -162,6 +175,13 @@ namespace CryptoBot.Indicators
             _fast.Update(price);
             _slow.Update(price);
             _signal.Update(_macd);
+
+            EmitNextValue(new Dictionary<string, object>()
+            {
+                { "MACD",      _macd           },
+                { "Signal",    _signal.Average },
+                { "Histogram", Value           }
+            });
         }
     }
 }

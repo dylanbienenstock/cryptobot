@@ -13,7 +13,7 @@ namespace CryptoBot.Indicators.Renderers
             using (var graphics = Graphics.FromImage(Context.Result))
             {
                 Font font = new Font("Iosevka", 10);
-                string interval = Exchange.GetIntervalName(Context.DataAggregate.PeriodDuration);
+                string interval = Exchange.GetIntervalName(Context.DataAggregate.TimeFrame);
                 string title = $"{Context.Pair} [{interval}] {Context.Indicator.Name}";
                 string subTitle = $"{DateTime.Now.ToString()}";
                 int textX = (int)(Context.OuterBoundsMax * 0.05);

@@ -9,18 +9,18 @@ namespace CryptoBot.Indicators.Renderers
 {
     public class HistogramRenderer : IndicatorRenderer
     {
-        private float _baseline;
-        private float _barGap;
+        private double _baseline;
+        private double _barGap;
         private Color _aboveColor;
         private Color _belowColor;
 
         public HistogramRenderer
         (
             int   order,
-            float baseline,
+            double baseline,
             Color above,
             Color below,
-            float barGap = 1
+            double barGap = 1
         )
         : base(order)
         {
@@ -45,7 +45,7 @@ namespace CryptoBot.Indicators.Renderers
             }
         }
 
-        public override (float min, float max) GetRange()
+        public override (double min, double max) GetRange()
         {
             var distanceFromBaseline = Math.Max
             (
@@ -59,23 +59,23 @@ namespace CryptoBot.Indicators.Renderers
             return (min, max);
         }
 
-        private RectangleF[] GetRectangleArray(Func<float, bool> selector) => 
+        private RectangleF[] GetRectangleArray(Func<double, bool> selector) => 
             Data.Values.ToList()
-                .Where (node => selector(node.Value))
+                .Where (node => selector((double)node.Value))
                 .Select(node => GetRectangle(node))
                 .ToArray();
 
-        private RectangleF GetRectangle(StatisticalSeriesNode<float> node)
+        private RectangleF GetRectangle(StatisticalSeriesNode<object> node)
         {
-            float width     = (float)Context.Bounds.Width / Data.Values.Count - _barGap * 2;
-            float barX      = MapX(node) + _barGap - width / 2;
-            float barY      = MapY(node);
-            float baselineY = MapY(_baseline);
+            double width     = (double)Context.Bounds.Width / Data.Values.Count - _barGap * 2;
+            double barX      = MapX(node) + _barGap - width / 2;
+            double barY      = MapY(node);
+            double baselineY = MapY(_baseline);
 
-            if (node.Value >= 0)
-                return new RectangleF(barX, barY, width, baselineY - barY);
+            if ((double)node.Value >= 0)
+                return new RectangleF((float)barX, (float)barY, (float)width, (float)baselineY - (float)barY);
 
-            return new RectangleF(barX, baselineY, width, barY - baselineY);
+            return new RectangleF((float)barX, (float)baselineY, (float)width, (float)barY - (float)baselineY);
         }
     }
 }

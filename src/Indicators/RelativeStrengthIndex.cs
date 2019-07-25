@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Dynamic;
 using System.Threading;
 using CryptoBot.Exchanges.Currencies;
 using CryptoBot.Exchanges.Series;
 using CryptoBot.Indicators.Renderers;
 using CryptoBot.Series;
+using CryptoBot.Scripting.Typings;
 
 /*
 
@@ -36,68 +38,72 @@ namespace CryptoBot.Indicators
 {
     using Node = StatisticalSeriesNode<TradingPeriod>;
 
-    public static class RSIFactory
-    {
-        public static IndicatorMultiInstance<RelativeStrengthIndex> RSI
-        (
-            this IndicatorFactory factory,
-            int periodDuration = IndicatorDefaults.PeriodDuration,
-            int periods = 14,
-            TradingPeriodAspect aspect = IndicatorDefaults.Aspect
-        ) {
-            return factory.CreateRaw<RelativeStrengthIndex>
-            (
-                periodDuration,
-                periods,
-                aspect
-            );
-        }
-    }
-
     public class RelativeStrengthIndex : Indicator
     {
         public decimal Value { get; private set; }
         public bool Complete => Source.Complete;
-        private TradingPeriodAspect _aspect;
+        private string _aspect;
         private MovingAverage _gain;
         private MovingAverage _loss;
         private bool _empty;
         private int _periods;
 
-        public RelativeStrengthIndex(IndicatorManifold manifold) : base("RSI", manifold) { }
+        public RelativeStrengthIndex() { }
 
-        public override void Configure(params dynamic[] settings)
+        public override IndicatorDetails Details => new IndicatorDetails
+        (
+            name:       "Relative Strength Index",
+            oscillator: true,
+            lagging:    true,
+            type:       IndicatorType.Momentum,
+            settings:   new []
+            {
+                new IndicatorSetting
+                (
+                    key: "Periods",
+                    name: "Periods",
+                    type: IndicatorSettingType.Int,
+                    defaultValue: 14
+                ),
+                new IndicatorSetting
+                (
+                    key: "Aspect",
+                    name: "Source",
+                    type: IndicatorSettingType.Aspect,
+                    defaultValue: "Close"
+                )
+            }
+        );
+
+        public override void Configure(dynamic settings)
         {
-            int periodDuration         = settings[0];
-            int periods                = settings[1];
-            TradingPeriodAspect aspect = settings[2];
-
-            PeriodDuration(periodDuration);
-            PrimaryOutput
+            PrimaryOutputField
             (
                 name: "RSI",
                 renderer: new ThresholdLineRenderer
                 (
                     order:   0,
                     width:   3.0f,
-                    levels:  new float[] { 0, 30, 70, 100 },
+                    levels:  new double[] { 0, 30, 70, 100 },
                     high:    IndicatorColor.Bearish,
                     neutral: IndicatorColor.Neutral,
                     low:     IndicatorColor.Bullish
                 )
             );
 
-            var series = Input(periodDuration, periods);
+            var series = RequireInput(TimeFrame, (int)settings.Periods);
             BindTo(series.Values);
 
             _empty = true;
-            _aspect = aspect;
-            _gain = new MovingAverage(Smoothing.Modified, series.Periods);
-            _loss = new MovingAverage(Smoothing.Modified, series.Periods);
+            _aspect = (string)settings.Aspect;
+            _gain = new MovingAverage(Smoothing.Modified, (int)settings.Periods);
+            _loss = new MovingAverage(Smoothing.Modified, (int)settings.Periods);
         }
         
         public override void OnFinalizeRecord(Node node)
         {
+            // Console.WriteLine(Source.Count);
+
             if (_empty) return;
             
             if (_loss.Average == 0)
@@ -108,12 +114,15 @@ namespace CryptoBot.Indicators
             
             decimal relativeStrength = _gain.Average / _loss.Average;
             Value = 100.0m - 100.0m / (1.0m + relativeStrength);
+
+            EmitNextValue(new Dictionary<string, object>()
+            {
+                { "RSI", Value }
+            });
         }
 
         public override void OnTradingPeriodClose(Node node)
         {
-            EmitNextValue("RSI", Value);
-
             if      (Value > 80) EmitSignal(IndicatorSignal.StrongSell, $"Overbought");
             else if (Value > 70) EmitSignal(IndicatorSignal.Sell,       $"Overbought");
             else if (Value < 20) EmitSignal(IndicatorSignal.StrongBuy,  $"Oversold");
@@ -121,6 +130,7 @@ namespace CryptoBot.Indicators
             else                 EmitSignal(IndicatorSignal.Neutral,    $"Neutral");
         }
         
+        [TypescriptIgnore]
         public override void OnComplete()
         {
             decimal gainSum = 0;
@@ -171,6 +181,11 @@ namespace CryptoBot.Indicators
             decimal change = node.GetChangePercentage(_aspect);
             _gain.Update(change >= 0 ?  change : 0);
             _loss.Update(change <  0 ? -change : 0);
+
+            EmitNextValue(new Dictionary<string, object>()
+            {
+                { "RSI", Value }
+            });
         }
     }
 }
