@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Reactive.Linq;
+using System.Reactive.Subjects;
 using System.Threading;
 using System.Threading.Tasks;
 using CryptoBot.Arbitrage;
 using CryptoBot.Exchanges.Currencies;
 using CryptoBot.Exchanges.Orders;
 using CryptoBot.Indicators;
+using CryptoBot.Storage;
 
 namespace CryptoBot.Exchanges
 {
@@ -60,6 +62,8 @@ namespace CryptoBot.Exchanges
         /// </summary>
         public IndicatorManifold Indicators;
 
+        public Subject<SyncStatusUpdate> SyncStatus;
+
         private Currency[] _currencyFilter;
         private CurrencyFilter _currencyFilterMode;
 
@@ -67,6 +71,8 @@ namespace CryptoBot.Exchanges
         private Dictionary<Market, bool> _marketComplete;
         private Dictionary<Market, List<CurrencyTrade>> _tradeBuffers;
         private object _tradeBufferLockObj;
+
+        private bool _connectWasCalled = false;
 
         /// <summary>
         /// Creates a new <see cref="ExchangeNetwork"/>
@@ -85,11 +91,15 @@ namespace CryptoBot.Exchanges
             CurrencyGraph = new CurrencyGraph(this);
             OrderStreams = new List<IObservable<CurrencyOrder>>();
             TradeStreams = new List<IObservable<CurrencyTrade>>();
+            SyncStatus = new Subject<SyncStatusUpdate>();
             _currencyFilter = currencies;
             _currencyFilterMode = filter;
             _marketComplete = new Dictionary<Market, bool>();
             _tradeBuffers = new Dictionary<Market, List<CurrencyTrade>>();
             _tradeBufferLockObj = new object();
+
+            // MergedOrderStream = new Observable<CurrencyOrder>();
+            // MergedOrderStream.Subscribe(o => RecordOrder(o));
         }
 
         /// <summary>
@@ -102,9 +112,12 @@ namespace CryptoBot.Exchanges
         /// <param name="exchanges">Exchanges to load and add to the network</param>
         public async Task Connect()
         {
+            if (_connectWasCalled) return;
+
             for (int i = 0; i < Exchanges.Length; i++)
             {
                 var exchange = Exchanges[i];
+                exchange.OrderStream.Subscribe(o => RecordOrder(o));
                 exchange.Network = this;
                 exchange.Index = i;
                 exchange.Http = HttpClient;
@@ -151,83 +164,19 @@ namespace CryptoBot.Exchanges
             }
 
             OnConnected();
-            FetchHistoricTrades();
         }
 
-        private static void WriteCheckmark(ConsoleColor color = ConsoleColor.Green)
+        private static async Task<List<string>> FetchSymbols(Exchange exchange, int maxAttempts = 5) =>
+            await exchange.FetchSymbols();
+
+        public async Task<List<HistoricalTradingPeriod>> GetTradingPeriods(Market market, double startTime, double endTime, long timeFrame)
         {
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine("✔");
-            Console.ResetColor();
-        }
+            var periods = await market.Exchange.FetchTradingPeriods(market, startTime, endTime, timeFrame);
 
-        private static void WriteFailureX()
-        {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.Write("×");
-            Console.ResetColor();
-        }
-
-        private static async Task<List<string>> FetchSymbols(Exchange exchange, int maxAttempts = 5)
-        {
-            Console.Write($"[{exchange.Name}] Fetching symbols... ");
-
-            Exception exception = null;
-
-            for (int i = 0; i < maxAttempts; i++)
-            {
-                try
-                {
-                    var symbols = await exchange.FetchSymbols();
-                    WriteCheckmark();
-                    Thread.Sleep(350);
-                    return symbols;
-                }
-                catch (Exception ex)
-                {
-                    exception = ex;
-                    WriteFailureX();
-                    Thread.Sleep((2 ^ i) * 2000);
-                }
-            }
-
-            throw exception;
-        }
-
-        private void FetchHistoricTrades(int periodDuration = 60000, int periodCount = 512, int maxBackoffs = 5)
-        {
-            // ! TODO: REPLACE THIS WITH SOMETHING BETTER (PULL FROM DB?)
-            // var currentMilliseconds = (DateTime.UtcNow - DateTime.UnixEpoch).TotalMilliseconds;
-            // var firstPeriodMilliseconds = Math.Ceiling(currentMilliseconds / periodDuration) * periodDuration;
-            // var waitMilliseconds = Math.Ceiling(firstPeriodMilliseconds - currentMilliseconds);
-
-            // Console.Write($"Waiting {(int)Math.Floor(waitMilliseconds / 1000)} seconds to fetch historical trades... ");
-            // await Task.Delay((int)waitMilliseconds);
-            // WriteCheckmark(ConsoleColor.Red);
-
-            // foreach (var exchange in Exchanges)
-            // {
-            //     Console.Write($"[{exchange.Name}] Fetching historical rates... ");
-
-            //     foreach (var market in exchange.Markets.Values)
-            //     {
-            //         var periods = await exchange.FetchHistoricalTradingPeriods
-            //         (
-            //             symbol: market.Symbol,
-            //             startTime: firstPeriodMilliseconds,
-            //             periodDuration: periodDuration,
-            //             count: periodCount
-            //         );
-
-            //         Indicators.AddHistoricalTradingPeriods(market, periods);
-            //         PlaybackBufferedTrades(market);
-
-            //         market.UpToDate = true;
-            //     }
-
-            //     WriteCheckmark(ConsoleColor.Yellow);
-            // }
-            // ! SERIOUSLY THIS IS IMPORTANT
+            return periods
+                .Distinct()
+                .OrderBy(t => t.Minute)
+                .ToList();
         }
 
         private void PlaybackBufferedTrades(Market market)
@@ -240,12 +189,11 @@ namespace CryptoBot.Exchanges
                 _marketComplete[market] = true;
                 _tradeBuffers.Remove(market);
                 
-                if (_tradeBuffers.Count == 0)
-                {
-                    _mergedTradeStreamSubscription.Dispose();
-                    _mergedTradeStreamSubscription = 
-                        MergedTradeStream.Subscribe(t => RecordTrade(t));
-                }
+                if (_tradeBuffers.Count > 0) return;
+            
+                _mergedTradeStreamSubscription.Dispose();
+                _mergedTradeStreamSubscription = 
+                    MergedTradeStream.Subscribe(t => RecordTrade(t));
             }
         }
 
@@ -257,21 +205,14 @@ namespace CryptoBot.Exchanges
             CurrencyGraph.RenderToImage();
 
             MergedOrderStream = Observable.Merge(OrderStreams);
-            MergedOrderStream.Subscribe(o => RecordOrder(o));
+            // MergedOrderStream.Subscribe(o => RecordOrder(o));
 
             MergedTradeStream = Observable.Merge(TradeStreams);
             _mergedTradeStreamSubscription =
-                MergedTradeStream.Subscribe(t => RecordTrade(t));
+                MergedTradeStream.Subscribe(t => BufferOrRecordTrade(t));
                 
             foreach (var exchange in Exchanges) 
-            {
-                Console.Write($"[{exchange.Name}] Connecting to websocket stream... ");
                 exchange.Connect(exchange.Symbols);
-                WriteCheckmark();
-            }
-
-            Console.Write("\nConnected to all exchanges ");
-            WriteCheckmark();
         }
 
         private void RecordOrder(CurrencyOrder order)

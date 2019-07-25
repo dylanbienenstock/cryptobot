@@ -160,7 +160,14 @@ namespace CryptoBot.Exchanges.Adapters
         /// How many trading periods to pull
         /// </param>
         /// <returns></returns>
-        public override async Task<List<HistoricalTradingPeriod>> FetchHistoricalTradingPeriods(string symbol, double startTime, int periodDuration, int count)
+        public override async Task<List<HistoricalTradingPeriod>> FetchTradingPeriods
+        (
+            string symbol,
+            double startTime,
+            long timeFrame,
+            int count,
+            int priority = 1
+        )
         {
             // A maximum of 300 periods can be requested at one time
             var allPeriods = new List<HistoricalTradingPeriod>();
@@ -179,8 +186,8 @@ namespace CryptoBot.Exchanges.Adapters
                 var periodCount = Math.Min(count - inverseI * 300, 300);
 
                 // Convert them to millisecond amounts relative to startTime
-                var seekOrigin  = startTime - periodDuration * periodDepth;
-                var seekEnd     = seekOrigin + periodDuration * periodCount;
+                var seekOrigin  = startTime - timeFrame * periodDepth;
+                var seekEnd     = seekOrigin + timeFrame * periodCount;
 
                 // Timestamps should conform to ISO 8601
                 // More info: https://en.wikipedia.org/wiki/ISO_8601
@@ -190,7 +197,7 @@ namespace CryptoBot.Exchanges.Adapters
                 {
                     "start="       + start.ToString("s"),
                     "end="         + end.ToString("s"),
-                    "granularity=" + periodDuration / 1000
+                    "granularity=" + timeFrame / 1000
                 });
                 var uri = $"{uris.Products}/{symbol}/candles?{uriParams}";
 
@@ -415,6 +422,16 @@ namespace CryptoBot.Exchanges.Adapters
         }
 
         public override Task<HistoricalTradingPeriod> GetFirstHistoricalTradingPeriod(CurrencyPair pair)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override decimal GetAmountStepSize(string symbol)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Task<MarketTicker[]> GetMarketTickers()
         {
             throw new NotImplementedException();
         }

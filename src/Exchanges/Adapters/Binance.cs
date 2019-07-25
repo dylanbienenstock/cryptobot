@@ -10,6 +10,7 @@ using Newtonsoft.Json;
 using CryptoBot.Exchanges.Currencies;
 using CryptoBot.Exchanges.Orders;
 using CryptoBot.Indicators;
+using System.Reactive.Subjects;
 
 namespace CryptoBot.Exchanges
 {
@@ -25,6 +26,9 @@ namespace CryptoBot.Exchanges
 
             [JsonProperty("quoteAsset")]
             public string Quote;
+
+            [JsonProperty("filters")]
+            public Dictionary<string, dynamic>[] Filters;
         }
 
         public struct B_ExchangeInfo
@@ -105,33 +109,50 @@ namespace CryptoBot.Exchanges
             public B_Trade Data;
         }
 
+        public struct B_MarketTicker
+        {
+            [JsonProperty("symbol")]
+            public string Symbol;
+
+            [JsonProperty("priceChange")]
+            public string PriceChange;
+
+            [JsonProperty("priceChangePercent")]
+            public string PriceChangePercentage;
+
+            [JsonProperty("lastPrice")]
+            public string LastPrice;
+
+            [JsonProperty("volume")]
+            public string Volume;
+        }
+
         private WebSocketFeed<B_AggUpdate>         _orderFeed;
         private WebSocketFeed<B_AggTrade>          _tradeFeed;
         private IDisposable                        _orderFeedSubscription;
         private IDisposable                        _tradeFeedSubscription;
-        private IObservable<CurrencyOrder>         _orderStream;
-        private IObservable<CurrencyTrade>         _tradeStream;
-        private List<IObserver<CurrencyOrder>>     _orderObservers;
-        private List<IObserver<CurrencyTrade>>     _tradeObservers;
+        private Subject<CurrencyOrder>             _orderStream;
+        private Subject<CurrencyTrade>             _tradeStream;
         private ExchangeDetails                    _details;
         private Dictionary<string, B_Snapshot>     _snapshots;
         private Dictionary<string, List<B_Update>> _updateBuffer;
+        private Dictionary<string, bool>           _orderbookUpToDate;
         private Dictionary<string, string[]>       _symbolDict;
         private HttpBackoffClient                  _httpClient;
-        private bool                               _fullyConnected;
+
+        private Dictionary<(string Symbol, string Filter, string Key), dynamic> _assetFilters;
 
         public Binance()
         {
             _details        = new ExchangeDetails("Binance", 0.001m);
-            _orderStream    = Observable.Create((IObserver<CurrencyOrder> o) => OnOrderStreamSubscribed(o));
-            _tradeStream    = Observable.Create((IObserver<CurrencyTrade> t) => OnTradeStreamSubscribed(t));
-            _orderObservers = new List<IObserver<CurrencyOrder>>();
-            _tradeObservers = new List<IObserver<CurrencyTrade>>();
+            _orderStream    = new Subject<CurrencyOrder>();
+            _tradeStream    = new Subject<CurrencyTrade>();
             _snapshots      = new Dictionary<string, B_Snapshot>();
             _updateBuffer   = new Dictionary<string, List<B_Update>>();
             _symbolDict     = new Dictionary<string, string[]>();
             _httpClient     = new HttpBackoffClient("https://www.binance.com/api/v1/");
-            _fullyConnected = false;
+            _orderbookUpToDate = new Dictionary<string, bool>();
+            _assetFilters   = new Dictionary<(string, string, string), dynamic>();
 
             _httpClient.SetBackoff((attempts, response) =>
             {
@@ -156,41 +177,61 @@ namespace CryptoBot.Exchanges
         public override string[] SplitSymbol(string symbol) => _symbolDict[symbol];
 
         public override async Task<List<string>> FetchSymbols()
-        {
+        {   
             B_ExchangeInfo response = await _httpClient.Get<B_ExchangeInfo>("exchangeInfo");
             var symbols = response.Symbols.Select(s => s.Symbol);
 
-            foreach (var symbol in response.Symbols)
+            foreach (var symbol in response.Symbols) {
                 _symbolDict.Add(symbol.Symbol, new [] { symbol.Base, symbol.Quote });
+                _orderbookUpToDate[symbol.Symbol] = false;
+                
+                void StoreFilter(string filterType, string key)
+                {
+                    var keyTuple = (symbol.Symbol, filterType, key);
+                    var value = symbol.Filters.First(f => (string)f["filterType"] == filterType)[key];
+                    _assetFilters.Add(keyTuple, value);
+                }
+
+                StoreFilter("PRICE_FILTER",        "tickSize");
+                StoreFilter("LOT_SIZE",            "stepSize");
+                StoreFilter("MIN_NOTIONAL",        "minNotional");
+                StoreFilter("MAX_NUM_ALGO_ORDERS", "maxNumAlgoOrders");
+            }
 
             return symbols.ToList();
         }
 
-        public override async Task<List<HistoricalTradingPeriod>> FetchHistoricalTradingPeriods
+        public override decimal GetAmountStepSize(string symbol)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override async Task<List<HistoricalTradingPeriod>> FetchTradingPeriods
         (
             string symbol,
-            double start,
-            int interval,
-            int count
+            double startTime,
+            long timeFrame,
+            int count,
+            int priority = 1
         )
         {
-            if (count > 1000) throw new Exception("Cannot fetch more than 1000 candles");
-
             var pair = new CurrencyPair(this, symbol);
-            var intervalName = GetIntervalName(interval);
-            var tradingPeriods = (await _httpClient.Get<decimal[][]>
-            (
-                endpoint: "klines",
-                parameters: new UriParams
-                {
-                    { "symbol",    symbol        },
-                    { "interval",  intervalName  },
-                    { "limit",     count         },
-                    { "startTime", (Int64)start  }
-                }
-            ))
-            .Select(candle => new HistoricalTradingPeriod(candle))
-            .ToList();
+            var intervalName = GetIntervalName(timeFrame);
+            var endTime = startTime + (double)timeFrame * (double)count;
+            var uriParams = new UriParams
+            {
+                { "symbol",    symbol       },
+                { "interval",  intervalName },
+                { "startTime", startTime    },
+                { "limit",     count        }
+            };
+
+            if (count > 1) uriParams.Add("endTime", endTime);
+
+            var response = await _httpClient.Get<decimal[][]>("klines", uriParams, priority);
+            var tradingPeriods = response
+                .Select(candle => new HistoricalTradingPeriod(candle))
+                .ToList();
 
             return tradingPeriods;
         }
@@ -198,21 +239,11 @@ namespace CryptoBot.Exchanges
         public override async Task<HistoricalTradingPeriod> GetFirstHistoricalTradingPeriod(CurrencyPair pair)
         {
             string symbol = CurrencyPairToSymbol(pair);
-            return (await FetchHistoricalTradingPeriods(symbol, 0, 60000, 1))[0];
+            return (await FetchTradingPeriods(symbol, 0, 60000, 1, 0))[0];
         }
 
         public string CurrencyPairToSymbol(CurrencyPair pair) =>
             pair.ToString("").ToUpper();
-
-        private IDisposable OnOrderStreamSubscribed(IObserver<CurrencyOrder> observer) {
-            _orderObservers.Add(observer);
-            return Disposable.Empty;
-        }
-
-        private IDisposable OnTradeStreamSubscribed(IObserver<CurrencyTrade> observer) {
-            _tradeObservers.Add(observer);
-            return Disposable.Empty;
-        }
 
         private async Task GetSnapshots(List<string> symbols)
         {
@@ -229,9 +260,9 @@ namespace CryptoBot.Exchanges
 
                 _snapshots[symbol] = snapshot;
                 EmitSnapshot(snapshot, symbol);
+                _orderbookUpToDate[symbol] = true;
             }
 
-            _fullyConnected = true;
         }
 
         public override async void Connect(List<string> symbols)
@@ -267,10 +298,7 @@ namespace CryptoBot.Exchanges
                 time:     time
             );
 
-            lock (_tradeObservers)
-            {
-                _tradeObservers.ForEach(o => o.OnNext(trade));
-            }
+            _tradeStream.OnNext(trade);
         }
 
         private void EmitOrder(string symbol, OrderSide side, decimal[] orderTuple, long ms)
@@ -286,26 +314,23 @@ namespace CryptoBot.Exchanges
                 time:     time
             );
 
-            lock (_orderObservers)
-            {
-                _orderObservers.ForEach(o => o.OnNext(order));
-            }
+            _orderStream.OnNext(order);
         }
 
         private void EmitUpdate(B_Update update)
         {
             foreach (decimal[] bid in update.Bids)
-                this.EmitOrder(update.Symbol, OrderSide.Bid, bid, update.Time);
+                EmitOrder(update.Symbol, OrderSide.Bid, bid, update.Time);
 
             foreach (decimal[] ask in update.Asks)
-                this.EmitOrder(update.Symbol, OrderSide.Ask, ask, update.Time);
+                EmitOrder(update.Symbol, OrderSide.Ask, ask, update.Time);
         }
 
         private void EmitAggregatedUpdate(B_AggUpdate wrappedUpdate)
         {
             var update = wrappedUpdate.Data;
-            
-            if (!_fullyConnected)
+
+            if (!_orderbookUpToDate[update.Symbol])
             {
                 if (!_updateBuffer.ContainsKey(update.Symbol))
                     _updateBuffer[update.Symbol] = new List<B_Update>();
@@ -320,10 +345,10 @@ namespace CryptoBot.Exchanges
         private void EmitSnapshot(B_Snapshot snapshot, string symbol)
         {
             foreach (decimal[] bid in snapshot.Bids)
-                this.EmitOrder(symbol, OrderSide.Bid, bid, 0);
+                EmitOrder(symbol, OrderSide.Bid, bid, 0);
             
             foreach (decimal[] ask in snapshot.Asks)
-                this.EmitOrder(symbol, OrderSide.Ask, ask, 0);
+                EmitOrder(symbol, OrderSide.Ask, ask, 0);
         }
 
         private void EmitBufferedUpdates(List<string> symbols)
@@ -340,6 +365,24 @@ namespace CryptoBot.Exchanges
                         EmitUpdate(update);
                 }
             }
+        }
+
+        public override async Task<MarketTicker[]> GetMarketTickers()
+        {
+            var response = await _httpClient.Get<B_MarketTicker[]>("ticker/24hr", null, -1);
+
+            return response.Select(mt => {
+                var market = GetMarket(mt.Symbol);
+                return new MarketTicker
+                (
+                    market:                market,
+                    priceChange:           mt.PriceChange,
+                    priceChangePercentage: mt.PriceChangePercentage,
+                    lastPrice:             mt.LastPrice,
+                    volume:                mt.Volume
+                );
+            })
+            .ToArray();
         }
     }
 }

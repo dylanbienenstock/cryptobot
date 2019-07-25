@@ -87,11 +87,6 @@ namespace CryptoBot.Exchanges.Adapters
             return symbols;
         }
 
-        public override Task<List<HistoricalTradingPeriod>> FetchHistoricalTradingPeriods(string symbol, double startTime, int periodDuration, int count)
-        {
-            throw new NotImplementedException();
-        }
-
         public override async void Connect(List<string> symbols)
         {
             while (unsubbedSymbols.TryPop(out string symbol))
@@ -155,6 +150,28 @@ namespace CryptoBot.Exchanges.Adapters
         }
 
         public override Task<HistoricalTradingPeriod> GetFirstHistoricalTradingPeriod(CurrencyPair pair)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override decimal GetAmountStepSize(string symbol)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Task<List<HistoricalTradingPeriod>> FetchTradingPeriods
+        (
+            string symbol,
+            double startTime,
+            long timeFrame,
+            int count,
+            int priority = 1
+        )
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Task<MarketTicker[]> GetMarketTickers()
         {
             throw new NotImplementedException();
         }

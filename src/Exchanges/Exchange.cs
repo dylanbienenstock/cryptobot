@@ -1,7 +1,6 @@
 using System;
 using System.Net.Http;
 using System.Threading.Tasks;
-using CryptoBot.TcpDebug.Json;
 using Newtonsoft.Json;
 using CryptoBot.Exchanges.Currencies;
 using System.Collections.Generic;
@@ -12,7 +11,6 @@ namespace CryptoBot.Exchanges
     /// <summary>
     /// Base class for remote exchange adapters
     /// </summary>
-    [JsonConverter(typeof(ExchangeConverter))]
     public abstract class Exchange : IDisposable
     {
         public ExchangeNetwork Network;
@@ -29,10 +27,19 @@ namespace CryptoBot.Exchanges
         public abstract ExchangeDetails Details { get; }
 
         public abstract Task<List<string>> FetchSymbols();
-        public abstract Task<List<HistoricalTradingPeriod>> FetchHistoricalTradingPeriods(string symbol, double startTime, int periodDuration, int count);
+        public abstract Task<List<HistoricalTradingPeriod>> FetchTradingPeriods
+            (string symbol, double startTime, long timeFrame, int count, int priority = 1);
         public abstract Task<HistoricalTradingPeriod> GetFirstHistoricalTradingPeriod(CurrencyPair pair);
         public abstract void Connect(List<string> symbols);
         public abstract string[] SplitSymbol(string symbol);
+
+        public abstract Task<MarketTicker[]> GetMarketTickers();
+
+        public abstract decimal GetAmountStepSize(string symbol);
+
+        public Task<List<HistoricalTradingPeriod>> FetchTradingPeriods
+            (Market market, double startTime, double endTime, long timeFrame = 60000) =>
+                FetchTradingPeriods(market.Symbol, startTime, timeFrame, (int)((endTime - startTime) / timeFrame));
 
         public List<Currency> Currencies;
         public Dictionary<CurrencyPair, Market> Markets;
@@ -42,17 +49,26 @@ namespace CryptoBot.Exchanges
         public string Name => Details.Name;
         public decimal Fee => Details.Fee;
 
-        public static string GetIntervalName(int periodDuration)
+        public static string GetIntervalName(long timeFrame)
         {
-            switch (periodDuration)
+            switch (timeFrame)
             {
-                case 60000:   return "1m";
-                case 180000:  return "3m";
-                case 300000:  return "5m";
-                case 900000:  return "15m";
-                case 1800000: return "30m";
-                case 3600000: return "1hr";
-                default:      return "1m";
+                case 60000:      return "1m";
+                case 180000:     return "3m";
+                case 300000:     return "5m";
+                case 900000:     return "15m";
+                case 1800000:    return "30m";
+                case 3600000:    return "1h";
+                case 7200000:    return "2h";
+                case 14400000:   return "4h";
+                case 21600000:   return "6h";
+                case 28800000:   return "8h";
+                case 43200000:   return "12h";
+                case 86400000:   return "1d";
+                case 259200000:  return "3d";
+                case 604800000:  return "1w";
+                case 2592000000: return "1M";
+                default: throw new Exception("Unsupported timeframe: " + timeFrame);
             }
         }
 
