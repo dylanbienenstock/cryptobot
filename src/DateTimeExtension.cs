@@ -4,10 +4,11 @@ namespace CryptoBot
 {
     public static class DateTimeExtension
     {
+        // TODO fix casts
         public static double GetQuantizedMilliseconds(this DateTime dateTime, int intervalMilliseconds)
         {
             var milliseconds = (dateTime - DateTime.UnixEpoch).TotalMilliseconds;
-            return Math.Floor(milliseconds / intervalMilliseconds) * intervalMilliseconds;
+            return Math.Floor(milliseconds / (double)intervalMilliseconds) * (double)intervalMilliseconds;
         }
 
         public static double GetQuantizedMilliseconds(this DateTime dateTime, double intervalMilliseconds) =>
