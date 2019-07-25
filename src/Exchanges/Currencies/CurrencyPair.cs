@@ -1,11 +1,9 @@
 using System;
-using CryptoBot.TcpDebug.Json;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 
 namespace CryptoBot.Exchanges.Currencies
 {
-    [JsonConverter(typeof(CurrencyPairConverter))]
     public class CurrencyPair
     {
         public Currency Base;
@@ -40,7 +38,7 @@ namespace CryptoBot.Exchanges.Currencies
         private static Currency ParseBase(string _base)
         {
             if (!Enum.TryParse(_base, true, out Currency parsed))
-                throw new Exception("Could not parse base currency");
+                throw new Exception($"Could not parse base currency \"{_base}\"");
 
             return parsed;
         }
@@ -48,16 +46,19 @@ namespace CryptoBot.Exchanges.Currencies
         private static Currency ParseQuote(string quote)
         {
             if (!Enum.TryParse(quote, true, out Currency parsed))
-                throw new Exception("Could not parse quote currency");
+                throw new Exception($"Could not parse quote currency \"{quote}\"");
             
             return parsed;
         }
+
 
         public string ToGenericSymbol()
         {
             return Enum.GetName(typeof(Currency), Base) + '/' +
                    Enum.GetName(typeof(Currency), Quote);
         }
+        
+        public override string ToString() => ToGenericSymbol();
 
         public string ToString(string delimiter)
         {
@@ -67,18 +68,14 @@ namespace CryptoBot.Exchanges.Currencies
 
         public override bool Equals(object obj)
         {
-            if ((obj == null) || !this.GetType().Equals(obj.GetType())) 
-            {
+            if (obj == null || !this.GetType().Equals(obj.GetType()))
                 return false;
-            }
 
             var p = (CurrencyPair)obj;
             return p.Base == Base && p.Quote == Quote;
         }
 
-        public override int GetHashCode()
-        {
-            return ((int)Base << 2) ^ (int)Quote;
-        }
+        public override int GetHashCode() =>
+            ((int)Base << 2) ^ (int)Quote;
     }
 }

@@ -1,12 +1,10 @@
 using System.Collections.Generic;
 using CryptoBot.Exchanges;
-using CryptoBot.TcpDebug.Json;
 using Newtonsoft.Json;
 using CryptoBot.Exchanges.Currencies;
 
 namespace CryptoBot.Exchanges.Orders
 {
-    [JsonConverter(typeof(OrderBookConverter))]
     public struct OrderBook
     {
         public OrderList Bids;

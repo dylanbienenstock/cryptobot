@@ -7,8 +7,8 @@ namespace CryptoBot.Exchanges.Series
 {
     public class TimeSeries<T> : StatisticalSeries<T>
     {
-        private TimeSpan _duration;
-        private Dictionary<StatisticalSeriesNode<T>, DateTime> _times;
+        public TimeSpan Duration;
+        public Dictionary<StatisticalSeriesNode<T>, DateTime> _times;
         private object _lockObj;
 
         public DateTime HeadTime => GetTime(Head);
@@ -16,7 +16,7 @@ namespace CryptoBot.Exchanges.Series
 
         public TimeSeries(TimeSpan duration)
         {
-            _duration = duration;
+            Duration = duration;
             _times = new Dictionary<StatisticalSeriesNode<T>, DateTime>();
             _lockObj = new object();
         }
@@ -59,15 +59,16 @@ namespace CryptoBot.Exchanges.Series
             {
                 var removeNodes = new List<StatisticalSeriesNode<T>>();
 
-                while (_times[Head] < (_times[Tail] - _duration))
+                while (_times[Head] < (_times[Tail] - Duration))
                 {
                     Complete = true;
                     removeNodes.Add(Head);
                     DetachHead();
                 }
 
-                removeNodes.ForEach(n => _times.Remove(n));
-                EmitComplete();
+                // removeNodes.ForEach(n => _times.Remove(n));
+
+                if (Complete) EmitComplete();
             }
         }
 

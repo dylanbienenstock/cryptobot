@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Priority_Queue;
 
 namespace CryptoBot.Exchanges
 {
@@ -15,7 +17,7 @@ namespace CryptoBot.Exchanges
         private HttpClient _httpClient;
         private Func<int, HttpResponseMessage, int?> _backoffCallback;
         private Func<int, HttpResponseMessage, int?> _defaultBackoffCallback;
-        private Queue<Tuple<HttpRequestMessage, TaskCompletionSource<HttpResponseMessage>, Type>> _requestQueue;
+        private Priority_Queue.SimplePriorityQueue<Tuple<HttpRequestMessage, TaskCompletionSource<string>, Type>> _requestQueue;
         private Thread _requestThread;
         private Random _random;
         private bool _running;
@@ -24,7 +26,7 @@ namespace CryptoBot.Exchanges
         {
             _baseUri = baseUri;
             _httpClient = new HttpClient();
-            _requestQueue = new Queue<Tuple<HttpRequestMessage, TaskCompletionSource<HttpResponseMessage>, Type>>();
+            _requestQueue = new Priority_Queue.SimplePriorityQueue<Tuple<HttpRequestMessage, TaskCompletionSource<string>, Type>>();
             _random = new Random();
             _requestThread = new Thread(SendRequests);
 
@@ -39,31 +41,36 @@ namespace CryptoBot.Exchanges
         public void SetBackoff(Func<int, HttpResponseMessage, int?> callback) => 
             _backoffCallback = callback;
 
-        private async Task<T> SendRaw<T>(HttpRequestMessage requestMessage)
+        private async Task<T> SendRaw<T>(HttpRequestMessage requestMessage, int priority = 1)
         {
             requestMessage.RequestUri = new Uri(_baseUri + requestMessage.RequestUri);
-            
-            var httpCompletionSource = new TaskCompletionSource<HttpResponseMessage>();
+            var httpCompletionSource = new TaskCompletionSource<string>();
             var request = Tuple.Create(requestMessage, httpCompletionSource, typeof(T));
 
             lock (_requestQueue)
             {
-                _requestQueue.Enqueue(request);
+                _requestQueue.Enqueue(request, priority);
+
+                if (!_running)
+                {
+                    _running = true;
+                    _requestThread = new Thread(SendRequests);
+                    _requestThread.Start();
+                }
             }
 
-            if (!_running)
+            var responseBody = await request.Item2.Task;
+
+            try
             {
-                _running = true;
-                _requestThread = new Thread(SendRequests);
-                _requestThread.Start();
+                return JsonConvert.DeserializeObject<T>(responseBody);
+            } catch (Exception ex) {
+                Console.WriteLine(request.Item1.RequestUri);
+                throw ex;
             }
-
-            var response = await request.Item2.Task;
-            string responseBody = await response.Content.ReadAsStringAsync();
-            return JsonConvert.DeserializeObject<T>(responseBody);
         }
 
-        public async Task<T> Get<T>(string endpoint, UriParams parameters = null)
+        public async Task<T> Get<T>(string endpoint, UriParams parameters = null, int priority = 1)
         {
             string fullUri = endpoint;
             char delimiter = '?';
@@ -79,7 +86,7 @@ namespace CryptoBot.Exchanges
 
             var request = new HttpRequestMessage(HttpMethod.Get, fullUri);
 
-            return await SendRaw<T>(request);
+            return await SendRaw<T>(request, priority);
         }
 
         private async void SendRequests()
@@ -89,6 +96,7 @@ namespace CryptoBot.Exchanges
                 int attempts = 0;
                 Exception lastException = null;
                 HttpResponseMessage response = null;
+                string responseBody = null;
 
                 while (attempts <= 5 && response == null)
                 {
@@ -100,6 +108,7 @@ namespace CryptoBot.Exchanges
 
                         response = await _httpClient.SendAsync(requestCopy);
                         response.EnsureSuccessStatusCode();
+                        responseBody = await response.Content.ReadAsStringAsync();
                     }
                     catch
                     {
@@ -112,13 +121,13 @@ namespace CryptoBot.Exchanges
                     }
                 }
 
-                if (response == null)
+                if (response == null || responseBody == null)
                 {
                     if (lastException != null)
                         throw lastException;
                 }
 
-                request.Item2.SetResult(response);
+                request.Item2.SetResult(responseBody);
             }
 
             _running = false;

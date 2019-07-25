@@ -8,18 +8,18 @@ namespace CryptoBot.Indicators
     public class IndicatorData
     {
         public readonly string FieldName;
-        public readonly int PeriodDuration;
+        public readonly long TimeFrame;
         public readonly IndicatorRenderer Renderer;
-        public readonly TimeSeries<float> Values;
-        public float Min { get; private set; }
-        public float Max { get; private set; }
+        public readonly TimeSeries<object> Values;
+        public double Min { get; private set; }
+        public double Max { get; private set; }
         
-        public IndicatorData(string fieldName, int periodDuration, IndicatorRenderer renderer)
+        public IndicatorData(string fieldName, long timeFrame, IndicatorRenderer renderer)
         {
             FieldName = fieldName;
-            PeriodDuration = periodDuration;
+            TimeFrame = timeFrame;
             Renderer = renderer;
-            Values = new TimeSeries<float>(new TimeSpan(0, 1, 0, 0, 0));
+            Values = new TimeSeries<object>(new TimeSpan(0, 1, 0, 0, 0));
 
             Values.BindAnonymousReader
             (
@@ -28,10 +28,16 @@ namespace CryptoBot.Indicators
             );
         }
 
-        public void Record(float value, DateTime time)
+        public void Record(object value, DateTime time)
         {
             FillGaps(time);
             Values.Record(value, time);
+        }
+
+        public void UpdateTail(object value)
+        {
+            if (Values.Tail != null)
+                Values.Tail.Value = value;
         }
 
         private void FillGaps(DateTime time)
@@ -40,27 +46,27 @@ namespace CryptoBot.Indicators
 
             var lastTime = Values.TailTime;
 
-            if ((time - lastTime).TotalMilliseconds > PeriodDuration)
+            if ((time - lastTime).TotalMilliseconds > TimeFrame)
             {
-                var gaps = (time - lastTime).TotalMilliseconds / PeriodDuration;
+                var gaps = (time - lastTime).TotalMilliseconds / TimeFrame;
 
                 for (int i = 0; i < gaps; i++)
-                    Values.Record(Values.Tail.Value, lastTime.AddMilliseconds(PeriodDuration * i));                    
+                    Values.Record(Values.Tail.Value, lastTime.AddMilliseconds(TimeFrame * i));                    
             }
         }
 
-        private void OnPostAdd(float value)
+        private void OnPostAdd(object value)
         {
-            Min = Math.Min(Min, value);
-            Max = Math.Max(Max, value);
+            // Min = Math.Min(Min, value);
+            // Max = Math.Max(Max, value);
         }
 
-        private void OnPostRemove(float value)
+        private void OnPostRemove(object value)
         {
             var values = Values.Select(node => node.Value);
 
-            if (value == Min) Min = values.Min();
-            if (value == Max) Max = values.Max();
+            // if (value == Min) Min = values.Min();
+            // if (value == Max) Max = values.Max();
         }
     }
 }

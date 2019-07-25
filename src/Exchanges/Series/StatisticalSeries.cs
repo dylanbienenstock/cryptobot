@@ -9,13 +9,16 @@ namespace CryptoBot.Exchanges.Series
         public StatisticalSeriesNode<T> Head;
         public StatisticalSeriesNode<T> Tail;
         public List<StatisticalSeriesReader<T>> Readers;
+        public StatisticalSeriesReader<T> ReaderFilter;
         public bool Complete;
         public int Count;
+
         private object _lockObj;
 
         public StatisticalSeries()
         {
             Readers = new List<StatisticalSeriesReader<T>>();
+            ReaderFilter = null;
             Complete = false;
             Count = 0;
             _lockObj = new object();
@@ -104,13 +107,31 @@ namespace CryptoBot.Exchanges.Series
             }
         }
 
-        private void EmitPreAdd(StatisticalSeriesNode<T> node) => Readers.ForEach(r => r.OnPreAdd(node));
-        private void EmitPostAdd(StatisticalSeriesNode<T> node) => Readers.ForEach(r => r.OnPostAdd(node));
-        private void EmitPreUpdate(StatisticalSeriesNode<T> node) => Readers.ForEach(r => r.OnPreUpdate(node));
-        private void EmitPostUpdate(StatisticalSeriesNode<T> node) => Readers.ForEach(r => r.OnPostUpdate(node));
-        private void EmitPostRemove(StatisticalSeriesNode<T> node) => Readers.ForEach(r => r.OnPostRemove(node));
-        protected void EmitComplete() => Readers.ForEach(r => r.OnComplete());
-        protected void EmitFinalizeRecord(StatisticalSeriesNode<T> node) => Readers.ForEach(r => r.OnFinalizeRecord(node));
+        private void Emit(Action<StatisticalSeriesReader<T>> action)
+        {
+            lock (_lockObj)
+            {
+                if (ReaderFilter != null)
+                {
+                    action.Invoke(ReaderFilter);
+                    return;
+                }
+
+                var readers = new StatisticalSeriesReader<T>[Readers.Count + 1];
+                Readers.CopyTo(readers);
+                
+                for (int i = 0; i < readers.Length - 1; i++)
+                    action.Invoke(readers[i]);
+            }
+        }
+
+        private void EmitPreAdd(StatisticalSeriesNode<T> node)           => Emit(r => r.OnPreAdd(node));
+        private void EmitPostAdd(StatisticalSeriesNode<T> node)          => Emit(r => r.OnPostAdd(node));
+        private void EmitPreUpdate(StatisticalSeriesNode<T> node)        => Emit(r => r.OnPreUpdate(node));
+        private void EmitPostUpdate(StatisticalSeriesNode<T> node)       => Emit(r => r.OnPostUpdate(node));
+        private void EmitPostRemove(StatisticalSeriesNode<T> node)       => Emit(r => r.OnPostRemove(node));
+        protected void EmitComplete()                                    => Emit(r => r.OnComplete());
+        protected void EmitFinalizeRecord(StatisticalSeriesNode<T> node) => Emit(r => r.OnFinalizeRecord(node));
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
         public IEnumerator<StatisticalSeriesNode<T>> GetEnumerator()

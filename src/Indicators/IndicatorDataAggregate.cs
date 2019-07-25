@@ -7,21 +7,21 @@ namespace CryptoBot.Indicators
 {
     public class IndicatorDataAggregate
     {
-        public readonly int PeriodDuration;
+        public readonly long TimeFrame;
         public readonly Dictionary<string, IndicatorData> Fields;
         public IndicatorData PrimaryField { get; private set; }
 
         public DateTime Start  => PrimaryField.Values.HeadTime;
         public DateTime End    => PrimaryField.Values.TailTime;
-        public float    Min    => Fields.Values.Select(field => field.Min).Min();
-        public float    Max    => Fields.Values.Select(field => field.Max).Max();
-        public float    Domain => (float)(End - Start).TotalMilliseconds;
-        public float    Range  => Max - Min;
+        public double   Min    => Fields.Values.Select(field => field.Min).Min();
+        public double   Max    => Fields.Values.Select(field => field.Max).Max();
+        public double   Domain => (double)(End - Start).TotalMilliseconds;
+        public double   Range  => Max - Min;
 
-        public IndicatorDataAggregate(int periodDuration)
+        public IndicatorDataAggregate(long timeFrame)
         {
             Fields = new Dictionary<string, IndicatorData>();
-            PeriodDuration = periodDuration;
+            TimeFrame = timeFrame;
         }
 
         public void AddPrimaryField(string fieldName, IndicatorRenderer renderer)
@@ -29,14 +29,17 @@ namespace CryptoBot.Indicators
             if (PrimaryField != null)
                 throw new Exception("Cannot define multiple primary fields");
 
-            PrimaryField = new IndicatorData(fieldName, PeriodDuration, renderer);
+            PrimaryField = new IndicatorData(fieldName, TimeFrame, renderer);
             Fields[fieldName] = PrimaryField;
         }
 
         public void AddField(string fieldName, IndicatorRenderer renderer) =>
-            Fields[fieldName] = new IndicatorData(fieldName, PeriodDuration, renderer);
+            Fields[fieldName] = new IndicatorData(fieldName, TimeFrame, renderer);
 
-        public void Record(string fieldName, float value, DateTime time) =>
+        public void UpdateTail(string fieldName, object value) =>
+            Fields[fieldName].UpdateTail(value);
+
+        public void Record(string fieldName, object value, DateTime time) =>
             Fields[fieldName].Record(value, time);
     }
 }
