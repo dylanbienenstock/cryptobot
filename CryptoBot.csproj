@@ -1,21 +1,26 @@
 <Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <OutputType>library</OutputType>
+        <TargetFramework>netcoreapp2.2</TargetFramework>
+        <NoWarn>$(NoWarn);NU1701</NoWarn>
+    </PropertyGroup>
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp2.2</TargetFramework>
-    <NoWarn>$(NoWarn);NU1701</NoWarn>
-  </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="CommandLineParser" Version="2.4.3" />
+        <PackageReference Include="Jint" Version="2.11.58" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="2.2.4" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="2.2.4" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="2.2.4" />
+        <PackageReference Include="Microsoft.Windows.Compatibility" Version="2.1.0-preview3.19128.7" />
+        <PackageReference Include="Newtonsoft.Json" Version="12.0.1" />
+        <PackageReference Include="OptimizedPriorityQueue" Version="4.2.0" />
+        <PackageReference Include="System.Reactive" Version="4.1.3" />
+        <PackageReference Include="Telegram.Bot" Version="14.11.0" />
+    </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="CommandLineParser" Version="2.4.3" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="2.2.4" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="2.2.4" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="2.2.4" />
-    <PackageReference Include="Microsoft.Windows.Compatibility" Version="2.1.0-preview3.19128.7" />
-    <PackageReference Include="Newtonsoft.Json" Version="12.0.1" />
-    <PackageReference Include="OptimizedPriorityQueue" Version="4.2.0" />
-    <PackageReference Include="System.Reactive" Version="4.1.3" />
-    <PackageReference Include="Telegram.Bot" Version="14.11.0" />
-  </ItemGroup>
-
+    <ItemGroup>
+        <Content Include="src\Scripting\Compiler\**">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </Content>
+    </ItemGroup>
 </Project>
