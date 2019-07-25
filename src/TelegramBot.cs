@@ -156,10 +156,6 @@ namespace CryptoBot
             InlineKeyboard options   = null
         )
         {
-            // if (IndicatorManifold.__DEBUG__) return;
-            if (IndicatorManifold.__DEBUG__)
-                caption = "*[!] DEBUG* " + caption;
-
             using (var imageStream = new MemoryStream())
             {
                 image.Save(imageStream, ImageFormat.Png);
