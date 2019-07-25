@@ -6,3 +6,5 @@ node_modules/
 journal.log
 marketgraph.png
 \.telegram\.sent_messages\.csv
+
+Migrations/
