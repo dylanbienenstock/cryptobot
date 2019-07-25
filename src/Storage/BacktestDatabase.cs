@@ -23,55 +23,121 @@ namespace CryptoBot.Storage
         private static Dictionary<Market, CompletionTuple> _cachedDataCompletion = 
             new Dictionary<Market, CompletionTuple>();
 
-        private static SemaphoreSlim _dbWriteSemaphore = new SemaphoreSlim(1,1);
+        private static SemaphoreSlim _dbWriteSemaphore = new SemaphoreSlim(1, 1);
 
         public static Subject<HistoricalTradingPeriod> Playback(Market market)
         {
             var subject = new Subject<HistoricalTradingPeriod>();
 
-            using (var context = new DbContext())
-            {
-                var stopwatch = new Stopwatch();
-                stopwatch.Start();
-
-                var query = GetTradingPeriodQuery(context, market)
-                    // .OrderBy(p => p.Minute)
-                    .AsNoTracking();
-
-                var startTime = query.First().Time;
-                var endTime   = query.Last().Time;
-                var seekTime  = startTime;
-                var pageSize  = 1440; // One day
-
-                var count = 0;
-                var lastTime = startTime;
-
-                var lastMinute = query.First().Minute - 1;
-
-                for (int i = 0; startTime.AddMinutes(i) < endTime; i += pageSize)
+            Task.Run(() => {
+                using (var context = new DbContext())
                 {
-                    var periods = query.Skip(i).Take(pageSize);
-                    periods.Load();
+                    Console.WriteLine("\n\n\nReading...");
+                    var stopwatch = new Stopwatch();
+                    stopwatch.Start();
 
-                    foreach (var period in periods)
+                    var query = GetTradingPeriodQuery(context, market)
+                        .AsNoTracking();
+
+                    var startTime = query.First().Time;
+                    var endTime   = query.Last().Time;
+                    var seekTime  = startTime;
+                    var pageSize  = 10000;
+                    var lastTime = startTime;
+
+                    var lastMinute = query.First().Minute - 1;
+                    var allPeriods = new List<HistoricalTradingPeriod>();
+
+                    for (int i = 0; startTime.AddMinutes(i) < endTime; i += pageSize)
                     {
-                        if (period.Minute != lastMinute + 1)
-                        {
-                            throw new Exception("BAD SORT");
-                        }
-                        lastMinute = period.Minute;
-
-                        count++;
-                        lastTime = period.Time;
-                        subject.OnNext(period);
+                        var periods = query.Skip(i).Take(pageSize);
+                        periods.Load();
+                        allPeriods.AddRange(periods);
                     }
+
+                    // stopwatch.Stop();
+                    // Console.WriteLine($"Read time: {stopwatch.ElapsedMilliseconds}ms");
+                    // Console.WriteLine($"Records: {allPeriods.Count}");
+                    // stopwatch.Restart();
+
+                    allPeriods = allPeriods
+                        .OrderBy(p => p.Minute)
+                        .ToList();
+
+                    // stopwatch.Stop();
+                    // Console.WriteLine($"Sort time: {stopwatch.ElapsedMilliseconds}ms");
+                    // stopwatch.Restart();
+
+                    // int notSorted = 0;
+                    // int duplicate = 0;
+
+                    // for (int i = 1; i < allPeriods.Count; i++) {
+                    //     if (allPeriods[i].Minute < allPeriods[i - 1].Minute)
+                    //         notSorted++;
+                    //     else if (allPeriods[i].Minute == allPeriods[i - 1].Minute)
+                    //         duplicate++;
+                    // }
+
+                    // stopwatch.Stop();
+                    // Console.WriteLine($"Ensure sorted time: {stopwatch.ElapsedMilliseconds}ms");
+                    // Console.WriteLine($"Unsorted entries: {notSorted}");
+                    // Console.WriteLine($"Duplicate entries: {duplicate}");
                 }
-                stopwatch.Stop();
-                Console.WriteLine($"Last time: {lastTime} | Read time: {stopwatch.ElapsedMilliseconds}ms | Records: {count}");
-            }
+            });
 
             return subject;
         }
+
+        // public static Subject<HistoricalTradingPeriod> Playback(Market market)
+        // {
+        //     var subject = new Subject<HistoricalTradingPeriod>();
+
+        //     Task.Run(() => {
+        //         using (var context = new DbContext())
+        //         {
+        //             var stopwatch = new Stopwatch();
+        //             stopwatch.Start();
+
+        //             var query = GetTradingPeriodQuery(context, market)
+        //                 .AsNoTracking()
+        //                 .OrderBy(p => p.Minute);
+
+        //             var startTime = query.First().Time;
+        //             var endTime   = query.Last().Time;
+        //             var seekTime  = startTime;
+        //             var pageSize  = 1440; // One day
+
+        //             var count = 0;
+        //             var lastTime = startTime;
+
+        //             var lastMinute = query.First().Minute - 1;
+
+        //             for (int i = 0; startTime.AddMinutes(i) < endTime; i += pageSize)
+        //             {
+        //                 var periods = query.Skip(i).Take(pageSize);
+        //                 periods.Load();
+
+        //                 foreach (var period in periods)
+        //                 {
+        //                     if (period.Minute < lastMinute) {
+        //                         Console.WriteLine("BAD SORT!!!");
+        //                         // throw new Exception("BAD SORT");
+        //                     }
+
+        //                     lastMinute = period.Minute;
+
+        //                     count++;
+        //                     lastTime = period.Time;
+        //                     subject.OnNext(period);
+        //                 }
+        //             }
+        //             stopwatch.Stop();
+        //             Console.WriteLine($"Last time: {lastTime} | Read time: {stopwatch.ElapsedMilliseconds}ms | Records: {count}");
+        //         }
+        //     });
+
+        //     return subject;
+        // }
 
         public static Subject<CompletionTuple> StartCollectingData(Market market)
         {
@@ -104,12 +170,13 @@ namespace CryptoBot.Storage
                             var pairHistory  = GetPairHistory(context, market);
                             var cursorMillis = (cursorTime - DateTime.UnixEpoch).TotalMilliseconds;
 
-                            var historicalPeriods = await market.Exchange.FetchHistoricalTradingPeriods
+                            var historicalPeriods = await market.Exchange.FetchTradingPeriods
                             (
                                 symbol: symbol,
                                 startTime: cursorMillis,
-                                periodDuration: 60000,
-                                count: 1000
+                                timeFrame: 60000,
+                                count: 1000,
+                                priority: 0
                             );
 
                             if (historicalPeriods.Count == 0) break;
@@ -145,9 +212,7 @@ namespace CryptoBot.Storage
                             var listingTime  = firstPeriod.Time.Quantize(60000);
                             var totalDays    = (DateTime.UtcNow - listingTime).TotalDays;
                             var completeDays = totalDays - (DateTime.UtcNow - cursorTime).TotalDays;
-                            var completion   = new CompletionTuple(completeDays, totalDays);
-
-                            Console.WriteLine($"{market.Exchange.Name}::{market.Pair.ToGenericSymbol()} : {(int)completeDays} / {(int)totalDays}");
+                            var completion   = new CompletionTuple(completeDays, totalDays, true);
 
                             subject.OnNext(completion);
                         }
@@ -175,6 +240,7 @@ namespace CryptoBot.Storage
 
             _dataCollectionCancellers[market].Cancel();
             _dataCollectionCancellers[market].Dispose();
+            _dataCollectionCancellers[market] = null;
             _dataCollectionCancellers.Remove(market);
         }
 
@@ -266,10 +332,7 @@ namespace CryptoBot.Storage
                 DateTime? cursorTime = null;
 
                 if (pairHistory.CursorTime != null)
-                {
-                    Console.WriteLine("SSSSS " + market.Pair.ToGenericSymbol() + " " + pairHistory.CursorTime.ToString());
                     return (DateTime)pairHistory.CursorTime;
-                }
 
                 await _dbWriteSemaphore.WaitAsync();
 
@@ -336,10 +399,17 @@ namespace CryptoBot.Storage
             return _Fetch(query);
         }
 
+        public static bool IsCollectingData(Market market) =>
+            _dataCollectionCancellers.ContainsKey(market);
+
         public static async Task<CompletionTuple> GetDataCompletion(Market market)
         {
             if (_cachedDataCompletion.ContainsKey(market))
-                return _cachedDataCompletion[market];
+            {
+                var cached = _cachedDataCompletion[market];
+                cached.Collecting = IsCollectingData(market);
+                return cached;
+            }
             
             using (var context = new DbContext())
             {
@@ -349,25 +419,36 @@ namespace CryptoBot.Storage
                 var listingTime  = firstPeriod.Time;
                 var totalDays    = (DateTime.UtcNow - listingTime).TotalDays;
                 var completeDays = totalDays - (DateTime.UtcNow - cursorTime).TotalDays;
-                var completion   = new CompletionTuple(completeDays, totalDays);
+                var isCollecting = IsCollectingData(market);    
+                var completion   = new CompletionTuple(completeDays, totalDays, isCollecting);
 
                 _cachedDataCompletion[market] = completion;
 
                 // If we don't have any historical trading periods saved,
                 // save the first one. Keeps us from having to query the 
                 // exchanges API every time.
-                if (!query.Any())
-                {
-                    var pairHistory = GetPairHistory(context, market);
+                if (query.Any()) return completion;
+                
+                var pairHistory = GetPairHistory(context, market);
 
-                    _dbWriteSemaphore.Wait();
-                    pairHistory.TradingPeriods.Add(firstPeriod);
-                    context.SaveChanges();
-                    _dbWriteSemaphore.Release();
-                }
+                _dbWriteSemaphore.Wait();
+                pairHistory.TradingPeriods.Add(firstPeriod);
+                context.SaveChanges();
+                _dbWriteSemaphore.Release();
 
                 return completion;
             }
         }
+
+        // public static List<HistoricalTradingPeriod> GetTradingPeriods(Market market, int startMinute, int endMinute)
+        // {
+        //     using (var context = new DbContext())
+        //     {
+        //         return GetTradingPeriodQuery(context, market)
+        //             .Where(t => t.Minute >= startMinute && t.Minute <= endMinute)
+        //             .OrderBy(t => t.Minute)
+        //             .ToList();
+        //     }
+        // }
     }
 }
