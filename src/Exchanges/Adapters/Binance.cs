@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Http;
-using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -127,10 +125,10 @@ namespace CryptoBot.Exchanges
             public string Volume;
         }
 
-        private WebSocketFeed<B_AggUpdate>         _orderFeed;
-        private WebSocketFeed<B_AggTrade>          _tradeFeed;
-        private IDisposable                        _orderFeedSubscription;
-        private IDisposable                        _tradeFeedSubscription;
+        private List<WebSocketFeed<B_AggUpdate>>   _orderFeeds;
+        private List<WebSocketFeed<B_AggTrade>>    _tradeFeeds;
+        private List<IDisposable>                  _orderFeedSubscriptions;
+        private List<IDisposable>                  _tradeFeedSubscriptions;
         private Subject<CurrencyOrder>             _orderStream;
         private Subject<CurrencyTrade>             _tradeStream;
         private ExchangeDetails                    _details;
@@ -139,6 +137,7 @@ namespace CryptoBot.Exchanges
         private Dictionary<string, bool>           _orderbookUpToDate;
         private Dictionary<string, string[]>       _symbolDict;
         private HttpBackoffClient                  _httpClient;
+        private object                             _lockObj;
 
         private Dictionary<(string Symbol, string Filter, string Key), dynamic> _assetFilters;
 
@@ -153,6 +152,7 @@ namespace CryptoBot.Exchanges
             _httpClient     = new HttpBackoffClient("https://www.binance.com/api/v1/");
             _orderbookUpToDate = new Dictionary<string, bool>();
             _assetFilters   = new Dictionary<(string, string, string), dynamic>();
+            _lockObj = new object();
 
             _httpClient.SetBackoff((attempts, response) =>
             {
@@ -199,11 +199,6 @@ namespace CryptoBot.Exchanges
             }
 
             return symbols.ToList();
-        }
-
-        public override decimal GetAmountStepSize(string symbol)
-        {
-            throw new NotImplementedException();
         }
 
         public override async Task<List<HistoricalTradingPeriod>> FetchTradingPeriods
@@ -267,38 +262,62 @@ namespace CryptoBot.Exchanges
 
         public override async void Connect(List<string> symbols)
         {
-            string websocketUri = "wss://stream.binance.com:9443/stream?streams=";
+            lock (_lockObj)
+            {
+                _orderFeeds = new List<WebSocketFeed<B_AggUpdate>>();
+                _tradeFeeds = new List<WebSocketFeed<B_AggTrade>>();
+                _orderFeedSubscriptions = new List<IDisposable>();
+                _tradeFeedSubscriptions = new List<IDisposable>();
 
-            string orderFeedNames = string.Join("@depth/", symbols).ToLower() + "@depth";
-            _orderFeed = new WebSocketFeed<B_AggUpdate>(websocketUri + orderFeedNames);
-            _orderFeedSubscription = _orderFeed.Subscribe(EmitAggregatedUpdate);
+                string websocketUri = "wss://stream.binance.com:9443/stream?streams=";
+                int maxSymbolsPerFeed = 64;
 
-            string tradeFeedNames = string.Join("@trade/", symbols).ToLower() + "@trade";
-            _tradeFeed = new WebSocketFeed<B_AggTrade>(websocketUri + tradeFeedNames);
-            _tradeFeedSubscription = _tradeFeed.Subscribe(EmitTrade);
+                for (int i = 0; i < symbols.Count / (double)maxSymbolsPerFeed; i++)
+                {
+                    var symbolsSlice = symbols.Skip(i * maxSymbolsPerFeed).Take(maxSymbolsPerFeed);
 
-            _tradeFeed.Connect();
-            _orderFeed.Connect();
+                    string orderFeedNames = string.Join("@depth/", symbolsSlice).ToLower() + "@depth";
+                    var orderFeed = new WebSocketFeed<B_AggUpdate>(websocketUri + orderFeedNames);
+                    var orderFeedSub = orderFeed.Subscribe(update => EmitAggregatedUpdate(update));
+                    _orderFeeds.Add(orderFeed);
+                    _orderFeedSubscriptions.Add(orderFeedSub);
+
+                    string tradeFeedNames = string.Join("@trade/", symbolsSlice).ToLower() + "@trade";
+                    var tradeFeed = new WebSocketFeed<B_AggTrade>(websocketUri + tradeFeedNames);
+                    var tradeFeedSub = tradeFeed.Subscribe(trade => EmitTrade(trade));
+                    _tradeFeeds.Add(tradeFeed);
+                    _tradeFeedSubscriptions.Add(tradeFeedSub);
+                }
+            }
+
+            foreach (var orderFeed in _orderFeeds) orderFeed.Connect();
+            foreach (var tradeFeed in _tradeFeeds) tradeFeed.Connect();
+
+            SpinWait.SpinUntil(() => _orderFeeds.All(f => f.Connected) && _tradeFeeds.All(f => f.Connected));
+
             await GetSnapshots(symbols);
             EmitBufferedUpdates(symbols);
         }
 
         private void EmitTrade(B_AggTrade aggTrade)
         {
-            var side = aggTrade.Data.BuyerIsMaker ? OrderSide.Bid : OrderSide.Ask;
-            var time = DateTime.UnixEpoch.AddMilliseconds(aggTrade.Data.Time);
-            var trade = new CurrencyTrade
-            (
-                exchange: this,
-                symbol:   aggTrade.Data.Symbol,
-                id:       aggTrade.Data.Id,
-                side:     side,
-                price:    aggTrade.Data.Price,
-                amount:   aggTrade.Data.Amount,
-                time:     time
-            );
+            lock (_lockObj)
+            {
+                var side = aggTrade.Data.BuyerIsMaker ? OrderSide.Bid : OrderSide.Ask;
+                var time = DateTime.UnixEpoch.AddMilliseconds(aggTrade.Data.Time);
+                var trade = new CurrencyTrade
+                (
+                    exchange: this,
+                    symbol:   aggTrade.Data.Symbol,
+                    id:       aggTrade.Data.Id,
+                    side:     side,
+                    price:    aggTrade.Data.Price,
+                    amount:   aggTrade.Data.Amount,
+                    time:     time
+                );
 
-            _tradeStream.OnNext(trade);
+                _tradeStream.OnNext(trade);
+            }
         }
 
         private void EmitOrder(string symbol, OrderSide side, decimal[] orderTuple, long ms)
@@ -328,18 +347,21 @@ namespace CryptoBot.Exchanges
 
         private void EmitAggregatedUpdate(B_AggUpdate wrappedUpdate)
         {
-            var update = wrappedUpdate.Data;
-
-            if (!_orderbookUpToDate[update.Symbol])
+            lock (_lockObj)
             {
-                if (!_updateBuffer.ContainsKey(update.Symbol))
-                    _updateBuffer[update.Symbol] = new List<B_Update>();
+                var update = wrappedUpdate.Data;
 
-                _updateBuffer[update.Symbol].Add(update);
-                return;
+                if (!_orderbookUpToDate[update.Symbol])
+                {
+                    if (!_updateBuffer.ContainsKey(update.Symbol))
+                        _updateBuffer[update.Symbol] = new List<B_Update>();
+
+                    _updateBuffer[update.Symbol].Add(update);
+                    return;
+                }
+
+                EmitUpdate(update);
             }
-
-            EmitUpdate(update);
         }
 
         private void EmitSnapshot(B_Snapshot snapshot, string symbol)

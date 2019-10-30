@@ -27,8 +27,9 @@ namespace CryptoBot.Exchanges.Series
         public virtual void Record(T value) { }
 
         public void BindReader(StatisticalSeriesReader<T> reader) => Readers.Add(reader);
+        public void UnbindReader(StatisticalSeriesReader<T> reader) => Readers.Remove(reader);
 
-        public void BindAnonymousReader
+        public AnonymousStatisticalSeriesReader<T> BindAnonymousReader
         (
             Action<StatisticalSeriesNode<T>> OnPreAdd         = null,
             Action<StatisticalSeriesNode<T>> OnPostAdd        = null,
@@ -51,6 +52,7 @@ namespace CryptoBot.Exchanges.Series
             );
 
             BindReader(anonymousReader);
+            return anonymousReader;
         }
 
         protected void AppendTail(StatisticalSeriesNode<T> node)

@@ -5,6 +5,11 @@ namespace CryptoBot.Scripting.Library
     public class InstancedLibrary
     {
         [TypescriptIgnore]
-        public string InstanceId;
+        public ScriptContext Context;
+
+        public InstancedLibrary(ScriptContext context)
+        {
+            Context = context;
+        }
     }
 }

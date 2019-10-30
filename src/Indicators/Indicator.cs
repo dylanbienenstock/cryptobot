@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Dynamic;
+using System.Linq;
 using System.Reactive.Subjects;
 using CryptoBot.Exchanges;
 using CryptoBot.Exchanges.Series;
@@ -10,7 +11,7 @@ using CryptoBot.Scripting.Typings;
 
 namespace CryptoBot.Indicators
 {
-    [TypescriptDefine]
+    [TypescriptDefine(@namespace: "InstanceOf")]
     public abstract class Indicator : TradingPeriodSeriesReader
     {
         public abstract IndicatorDetails Details { get; }
@@ -42,6 +43,13 @@ namespace CryptoBot.Indicators
             Configure(settings);
         }
 
+        [TypescriptIgnore]
+        public void Dispose()
+        {
+            Source.UnbindReader(this);
+        }
+
+        [TypescriptIgnore]
         public IndicatorDataAggregate ProcessOutsideManifold(long timeFrame, List<HistoricalTradingPeriod> periods)
         {
             var manifold = new IndicatorManifold();
@@ -108,6 +116,42 @@ namespace CryptoBot.Indicators
             }
 
             return IndicatorColor.Neutral;
+        }
+
+        [TypescriptCustomDefinition]
+        public string DefineSettingsAndDecorator()
+        {
+            if (Details.Settings.Length == 0) return "";
+
+            var indicatorName = GetType().Name;
+            var settingsInterfaceName = $"{indicatorName}Settings";
+            var def = $"declare interface {settingsInterfaceName} {'{'}\n";
+            def += "    timeFrame: TimeFrame;\n";
+
+            Details.Settings.ToList().ForEach(setting =>
+            {
+                def += "    ";
+                def += TypescriptDefinitions.CamelCase(setting.Key);
+                def += ": ";
+                def += setting.TypescriptType;
+                def += ";\n";
+            });
+
+            def += $@"{'}'}
+            
+namespace Indicator {'{'}
+    export function {indicatorName}(settings: {settingsInterfaceName}): InstanceOf.{indicatorName} {'{'}
+        return __requireIndicator<InstanceOf.{indicatorName}>({'"'}{indicatorName}{'"'}, settings);
+    {'}'}
+
+    export namespace Multi {'{'}
+        export function {indicatorName}(settings: {settingsInterfaceName}): IndicatorMultiInstance<InstanceOf.{indicatorName}> {'{'}
+            return __requireMultiIndicator<InstanceOf.{indicatorName}>({'"'}{indicatorName}{'"'}, settings);
+        {'}'}
+    {'}'}
+{'}'}";
+
+            return def;
         }
     }
 }

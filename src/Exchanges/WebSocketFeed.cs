@@ -56,11 +56,12 @@ namespace CryptoBot.Exchanges
         /// </exception>
         public async void Connect(dynamic subMsg = null)
         {
-            if (connected) throw new Exception("WebSocketFeed is already connected");
-
-            connected = true;
+            if (connected || webSocket.State == WebSocketState.Connecting) 
+                throw new Exception("WebSocketFeed is already connected");
 
             await webSocket.ConnectAsync(feedUri, token);
+
+            connected = true;
 
             if (subMsg != null) await Send(subMsg);
 

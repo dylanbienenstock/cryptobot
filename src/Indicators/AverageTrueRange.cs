@@ -20,7 +20,7 @@ namespace CryptoBot.Indicators
 
         public AverageTrueRange(Smoothing smoothing = Smoothing.Simple)
         {
-            
+            _movingAverage = new MovingAverage(smoothing, 14);
         }
 
         public override void OnPreAdd(StatisticalSeriesNode<TradingPeriod> node) { }

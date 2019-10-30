@@ -26,6 +26,7 @@ namespace CryptoBot.Indicators
 
         public WilliamsFractals() { }
 
+        [TypescriptDefine]
         public struct Fractal
         {
             public long Time;

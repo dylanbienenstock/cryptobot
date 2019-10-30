@@ -42,18 +42,6 @@ namespace CryptoBot.Exchanges.Orders
         /// The new <c>Count</c> of the list
         /// </returns>
         public int Record(CurrencyOrder order) => (Count += _Record(order));
-//         public int Record(CurrencyOrder order) {
-//             var stopwatch = new Stopwatch();
-//             stopwatch.Start();
-//             Count += _Record(order);
-//             stopwatch.Stop();
-//             var now = DateTime.UtcNow;
-// if (order.Time.Year != 1970) {
-// if (((now - order.Time).TotalMilliseconds + stopwatch.Elapsed.TotalMilliseconds) < 10000)
-// Console.WriteLine("["+order.Exchange.Name+"] " + new string('-', (int)Math.Floor(((now - order.Time).TotalMilliseconds + stopwatch.Elapsed.TotalMilliseconds))) + " " +  ((now - order.Time).TotalMilliseconds.ToString() + " + " + stopwatch.Elapsed.TotalMilliseconds));
-// }
-//             return Count;
-//         }
 
         public OrderNode[] ToArray()
         {

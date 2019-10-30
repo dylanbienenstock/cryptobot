@@ -15,5 +15,18 @@ namespace CryptoBot
             
             File.AppendAllText(Journal.LogFile, message + Environment.NewLine);
         }
+
+        public static void LogColored
+        (
+            string message = "",
+            ConsoleColor color = ConsoleColor.White,
+            bool echoConsole = true,
+            bool echoTelegram = false
+        )
+        {
+            Console.ForegroundColor = color;
+            Log(message, echoConsole, echoTelegram);
+            Console.ResetColor();
+        }
     }
 }

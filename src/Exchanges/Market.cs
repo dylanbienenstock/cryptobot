@@ -36,5 +36,8 @@ namespace CryptoBot.Exchanges
         public Task<HistoricalTradingPeriod> GetFirstHistoricalTradingPeriod() {
             return Exchange.GetFirstHistoricalTradingPeriod(Pair);
         }
+
+        public override string ToString() => $"{Exchange.Name}::{Pair.ToGenericSymbol()}";
+        
     }
 }

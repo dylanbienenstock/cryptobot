@@ -25,6 +25,7 @@ namespace CryptoBot.Indicators
         public Dictionary<Market, List<Indicator>>                       Indicators;
         public Dictionary<Indicator, IndicatorSignal>                    Signals;
         public Dictionary<Indicator, string>                             Notes;
+        public Dictionary<Indicator, List<IndicatorLease>>               Leases;
         private Dictionary<Market, Dictionary<long, Dictionary<int, TradingPeriodSeries>>> _inputs;
         private Dictionary<Market, DateTime>                             _historyTime;
 
@@ -34,6 +35,7 @@ namespace CryptoBot.Indicators
             Indicators       = new Dictionary<Market, List<Indicator>>();
             Signals          = new Dictionary<Indicator, IndicatorSignal>();
             Notes            = new Dictionary<Indicator, string>();
+            Leases           = new Dictionary<Indicator, List<IndicatorLease>>();
 
             _inputs          = new Dictionary<Market, Dictionary<long, Dictionary<int, TradingPeriodSeries>>>();
             _historyTime     = new Dictionary<Market, DateTime>();
@@ -56,7 +58,6 @@ namespace CryptoBot.Indicators
                         onCompleted: () => {}
                     );
                 });
-
             }
         }
 
@@ -98,13 +99,23 @@ namespace CryptoBot.Indicators
             }
         }
 
-        public async Task<Indicator> GetIndicator(Market market, string indicatorName, long timeFrame, ExpandoObject settings, bool getHistory = true)
+        public async Task<IndicatorLease> GetIndicator
+        (
+            Market market,
+            string indicatorName,
+            long timeFrame,
+            ExpandoObject settings,
+            bool getHistory = true
+        )
         {
+            if (!Indicators.ContainsKey(market))
+                AddMarket(market);
+
             // Attempts to find an existing indicator by comparing their type and settings
             var newSettings = (IDictionary<string, object>)settings;
             var indicator = Indicators[market].FirstOrDefault(ind =>
             {
-                if (ind.Name != indicatorName) return false;
+                if (ind.GetType() != IndicatorList.GetIndicatorType(indicatorName)) return false;
                 if (ind.TimeFrame != timeFrame) return false;
                 var compSettings = (IDictionary<string, object>)ind.Settings;
                 if (compSettings.Keys.Count == 0 && settings.Count() == 0) return true;
@@ -128,7 +139,75 @@ namespace CryptoBot.Indicators
                 }
             }
 
-            return indicator;
+            return CreateLease(indicator);
+        }
+
+        public IndicatorLease CreateLease(Indicator indicator)
+        {
+            if (!Leases.ContainsKey(indicator))
+                Leases[indicator] = new List<IndicatorLease>();
+
+            var lease = new IndicatorLease(indicator);
+            Leases[indicator].Add(lease);
+
+            return lease;
+        }
+
+        public void RevokeLease(IndicatorLease lease)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("REVOKED LEASE!");
+            Console.ResetColor();
+
+            if (Leases[lease.Indicator] == null)
+                throw new Exception("Tried to revoke an extraneous lease");
+
+            if (!Leases[lease.Indicator].Contains(lease))
+                throw new Exception("Tried to revoke an already revoked lease");
+
+            Leases[lease.Indicator].Remove(lease);
+
+            if (Leases[lease.Indicator].Count > 0) return;
+
+            lease.Indicator.Dispose();
+            Leases.Remove(lease.Indicator);
+            Indicators[lease.Indicator.Market].Remove(lease.Indicator);
+            Signals.Remove(lease.Indicator);
+            Notes.Remove(lease.Indicator);
+
+            RemoveInputIfUnused(lease);
+
+            if (Indicators[lease.Indicator.Market].Count == 0)
+                Indicators.Remove(lease.Indicator.Market);
+
+                // TODO: REMOVE INPUTS
+        }
+
+        private void RemoveInputIfUnused(IndicatorLease lease)
+        {
+            var usedByAnotherIndicator = false;
+
+            foreach (var indicatorList in Indicators.Values)
+            {
+                foreach (var indicator in indicatorList)
+                {
+                    if (indicator.Input == lease.Indicator.Input)
+                    {
+                        usedByAnotherIndicator = true;
+                        break;
+                    }
+                }
+
+                if (usedByAnotherIndicator) break;
+            }
+
+            if (!usedByAnotherIndicator)
+            {
+                _inputs[lease.Indicator.Market][lease.Indicator.TimeFrame].Remove(lease.Indicator.Input.Periods);
+
+                if (_inputs[lease.Indicator.Market][lease.Indicator.TimeFrame].Count == 0)
+                    _inputs[lease.Indicator.Market].Remove(lease.Indicator.TimeFrame);
+            }
         }
 
         public Indicator CreateRaw(Market market, string indicatorName, long timeFrame, ExpandoObject settings)

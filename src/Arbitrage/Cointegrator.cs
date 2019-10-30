@@ -7,30 +7,47 @@ using CryptoBot.Indicators;
 
 namespace CryptoBot.Arbitrage
 {
-    public struct CointegrableEdge
-    {
-        public Market Home;
-        public Market Away;
-        public TimeSeries<decimal> ReverseHistory;
-        public SimpleMovingAverage ReverseSMA;
-
-        public CointegrableEdge(Market home, Market away)
-        {
-            Home = home;
-            Away = away;
-            ReverseHistory = new TimeSeries<decimal>(Cointegrator.HistoryTimespan);
-            ReverseSMA = new SimpleMovingAverage(ReverseHistory);
-        }
-    }
-
+    /// <summary>
+    /// Cointegration arbitrage opportunity detector
+    /// </summary>
     public class Cointegrator
     {
-        public static TimeSpan HistoryTimespan = new TimeSpan(0, 0, 10);
+        /// <summary>
+        /// Determines how long to hold reverse profitablity history
+        /// in <see cref="CointegrableEdge.ReverseHistory"/>
+        /// </summary>
+        public static TimeSpan HistoryTimespan = TimeSpan.FromSeconds(10);
+
+        /// <summary>
+        /// Frequency to scan for arbitrage opportunities
+        /// </summary>
+        public long Frequency;
+
+        /// <summary>
+        /// <see cref="ExchangeNetwork"/> to run on
+        /// </summary>
         private ExchangeNetwork _network;
+
+        /// <summary>
+        /// Edges between all tracked markets
+        /// </summary>
         private List<CointegrableEdge> _edges;
+
+        /// <summary>
+        /// Execution thread
+        /// </summary>
         private Thread _thread;
 
-        public Cointegrator(ExchangeNetwork network)
+        /// <summary>
+        /// Constructs a new <see cref="Cointegrator"/>
+        /// </summary>
+        /// <param name="network">
+        /// <see cref="ExchangeNetwork"/> to run on
+        /// </param>
+        /// <param name="frequency">
+        /// Frequency to scan for arbitrage opportunities
+        /// </param>
+        public Cointegrator(ExchangeNetwork network, long frequency = 1)
         {
             _network = network;
             _edges = new List<CointegrableEdge>();
@@ -38,6 +55,9 @@ namespace CryptoBot.Arbitrage
             _thread.Start();
         }
 
+        /// <summary>
+        /// Builds the graph and starts the execution thread
+        /// </summary>
         public void Start()
         {
             BuildGraph();
@@ -49,6 +69,9 @@ namespace CryptoBot.Arbitrage
             }
         }
 
+        /// <summary>
+        /// Builds a graph of <see cref="CointegrableEdge"/> instances
+        /// </summary>
         private void BuildGraph()
         {
             foreach (var homeExchange in _network.Exchanges)
@@ -71,6 +94,19 @@ namespace CryptoBot.Arbitrage
             }
         }
 
+        /// <summary>
+        /// Gets the profitability of moving funds from one market to another
+        /// </summary>
+        /// <param name="from">
+        /// Market with funds
+        /// </param>
+        /// <param name="to">
+        /// Market to move funds to
+        /// </param>
+        /// <param name="withFees">
+        /// Enable or disable fee consideration
+        /// </param>
+        /// <returns>Decimal fraction representing profitability %</returns>
         public decimal GetTransactionResult(Market from, Market to, bool withFees = true)
         {
             if (withFees) return
@@ -80,7 +116,12 @@ namespace CryptoBot.Arbitrage
             return from.BestBid - to.BestAsk;
         }
 
-        public void TestMarkets()
+        /// <summary>
+        /// Finds cointegration arbitrage opportunities by
+        /// scanning for discrepencies in exchange rates for the
+        /// same pair across different exchanges
+        /// </summary>
+        private void TestMarkets()
         {
             foreach (var edge in _edges)
             {

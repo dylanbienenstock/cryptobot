@@ -25,9 +25,10 @@ namespace CryptoBot.Indicators
 
         public static void Add<T>() where T : Indicator, new()
         {
-            var description = (new T()).Details;
+            var description                   = (new T()).Details;
             _indicatorTypes[description.Name] = typeof(T);
-            _indicatorDetails[typeof(T)] = description;
+            _indicatorTypes[typeof(T).Name]   = typeof(T);
+            _indicatorDetails[typeof(T)]      = description;
         }
 
         public static Type GetIndicatorType(string indicatorName) =>

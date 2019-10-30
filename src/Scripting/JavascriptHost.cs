@@ -1,113 +1,93 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reactive.Subjects;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using CryptoBot.Indicators;
 using CryptoBot.Scripting.Library;
 using CryptoBot.Scripting.Modules;
 using CryptoBot.Scripting.Typings;
 using Jint;
+using Jint.Runtime;
+using Jint.Runtime.Interop;
 using Newtonsoft.Json;
 
 namespace CryptoBot.Scripting
 {
     public static class JavascriptHost
     {
-        public static Subject<InstancedLibraryCall<string>> OnLog;
-        public static Subject<InstancedLibraryCall<string>> OnWarn;
-        public static Subject<InstancedLibraryCall<string>> OnError;
-
-        static JavascriptHost()
+        public static async Task Execute(ScriptContext context)
         {
-            OnLog = new Subject<InstancedLibraryCall<string>>();
-            OnWarn = new Subject<InstancedLibraryCall<string>>();
-            OnError = new Subject<InstancedLibraryCall<string>>();
-
-            OnLog.Subscribe(call =>
+            if (context.JavascriptSource == null)
             {
-                Console.WriteLine($"JAVASCRIPT HOST INSTANCE {call.InstanceId} SAYS:");
-                Console.WriteLine(call.Arguments);
-            });
+                var tsSource        = context.TypescriptSource;
+                var tsPreProcessed  = await PreProcessTypescript(tsSource, context.ModuleType);
+                var jsCompiled      = await TypescriptCompiler.Compile(tsPreProcessed);
+                var jsPostProcessed = PostProcessJavascript(jsCompiled);;
+
+                context.JavascriptSource = jsPostProcessed;
+            }
+                
+            context.Engine = new Engine();
+            Library.JavascriptLibrary.Apply(context.Engine, context);
+
+            try 
+            {
+                context.Engine.Execute(context.JavascriptSource);
+            }
+            catch (JavaScriptException ex)
+            {
+                HandleRuntimeException(context, ex);
+            }
         }
 
-        public static async Task<string> ExecuteTypescript(string tsSource)
+        public static void HandleRuntimeException(ScriptContext context, JavaScriptException ex)
         {
-            string synopsis = "";
+            var surroundingLines = 8;
+            var lineNumber = ex.LineNumber - 1;
+            var lines = context.JavascriptSource.Split("\n");
+            var startLineIndex = Math.Max(0, lineNumber - surroundingLines);
+            var endLineIndex = Math.Min(lines.Length - 1, lineNumber + surroundingLines);
 
-            try
+            for (int i = startLineIndex; i < endLineIndex; i++)
             {
-                var tsCompilerOptions = new TypescriptCompiler.Options()
+                Console.ForegroundColor = ConsoleColor.Yellow;
+
+                Console.Write((i + 1) + "  ");
+
+                if (i == lineNumber) 
+                    Console.ForegroundColor = ConsoleColor.Red;
+                else Console.ResetColor();
+
+                Console.WriteLine(lines[i]);
+
+                if (i == lineNumber)
                 {
-                    Project = TypescriptDefinitions.ProjectFilePath
-                };
-                var jsCompiled = await TypescriptCompiler.Compile(tsSource, tsCompilerOptions);
-                var jsProcessed = PostProcessJavascript(jsCompiled);
-                
-                var engine = new Engine();
-                Library.JavascriptLibrary.Apply(engine);
-                engine.SetValue("log", new Action<object>(Console.WriteLine));
-                engine.Execute(jsProcessed);
-
-                var nameRegex = new Regex(@"export(?:\s+)default(?:\s+)class(?:\s+)(.+)(?:\s+){", RegexOptions.ECMAScript);
-                var name = nameRegex.Match(tsSource).Groups[1];
-
-                { // Compilation output
-                    Console.WriteLine("TYPESCRIPT SOURCE: ");
-                    Console.ForegroundColor = ConsoleColor.Magenta;
-                    Console.WriteLine(tsSource.Trim());
+                    Console.WriteLine(new string(' ', ex.Column + ((i + 1) + "  ").Length) + "^");
                     Console.ResetColor();
-                    Console.WriteLine();
-                    Console.WriteLine("COMPILED JAVASCRIPT: ");
-                    Console.ForegroundColor = ConsoleColor.Yellow;
-                    Console.WriteLine(jsCompiled.Trim());
-                    Console.ResetColor();
-                    Console.WriteLine();
-                    Console.WriteLine("POST-PROCESSED JAVASCRIPT: ");
-                    Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine(jsProcessed.Trim());
-                    Console.ResetColor();
+                    Console.WriteLine(ex.Message);
                     Console.WriteLine();
                 }
-
-                var defaultExportInstance = engine.Execute("new exports.default()")
-                    .GetCompletionValue()
-                    .AsObject();
-
-                var defaultExportProperties = defaultExportInstance.GetOwnProperties()
-                    .Select(kv => $"{kv.Key}: {kv.Value.Value.Type.ToString().ToLower()}");
-
-                var defaultExportMethods = defaultExportInstance.Prototype.GetOwnProperties()
-                    .Select(kv => $"{kv.Key}: Function");
-
-                synopsis = $"class {name} { '{' }\n";
-                synopsis += String.Join('\n', defaultExportProperties.Select(p => $"    {p};")) + "\n";
-                synopsis += String.Join('\n',defaultExportMethods.Select(m => $"    {m};")) + "\n";
-                synopsis += "}";
-
-                { // Execution output
-                    Console.WriteLine("JAVASCRIPT EXECUTION OUTPUT: ");
-                    Console.ForegroundColor = ConsoleColor.Blue;
-                    Console.WriteLine();
-                    Console.WriteLine(synopsis);
-                    Console.ResetColor();
-                    Console.WriteLine();
-                }
-
-                var bound = JavascriptHelper.BindObject<SignalEmitter>(defaultExportInstance);
-                bound.OnInit();
             }
-            catch (Exception ex)
+
+            Console.ResetColor();
+        }
+
+        private static async Task<string> PreProcessTypescript(string tsSource, ModuleType moduleType)
+        {
+            var moduleTypeName = Enum.GetName(typeof(ModuleType), moduleType);
+            var moduleLibrary  = "__" + TypescriptDefinitions.CamelCase(moduleTypeName);
+
+            var tsPreProcessed = string.Join("\n\n", new string[]
             {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("Execution failed:");
-                Console.WriteLine(ex);
-                Console.ResetColor();
-
-                synopsis = ex.Message;
-            }
-
-            return synopsis;
+                $"var module = {moduleLibrary};",
+                await TypescriptDefinitions.GetLibrary(),
+                tsSource
+            });
+            
+            return tsPreProcessed;
         }
 
         private static string PostProcessJavascript(string jsCompiled)
@@ -133,12 +113,12 @@ namespace CryptoBot.Scripting
                 outputLines.Add(line);
             }
 
-            var output = String.Join('\n', outputLines);
+            var jsPostProcessed = String.Join('\n', outputLines);
 
-            if (!output.Contains(header))
-                output = header + "\n" + output;
+            if (!jsPostProcessed.Contains(header))
+                jsPostProcessed = header + "\n" + jsPostProcessed;
 
-            return output;
+            return jsPostProcessed;
         }
 
         private static string Stringify(object obj)

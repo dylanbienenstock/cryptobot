@@ -1,9 +1,8 @@
 using System;
-using System.Linq;
 
 namespace CryptoBot.Scripting.Typings
 {
-    public class JavascriptBindable : Attribute
+    public class TypescriptCustomDefinition : Attribute
     {
     }
 }

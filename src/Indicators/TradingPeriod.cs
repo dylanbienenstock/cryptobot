@@ -80,9 +80,13 @@ namespace CryptoBot.Indicators
         {
             switch (aspect)
             {
+                case "open":
                 case "Open":  return Open;
+                case "high":
                 case "High":  return High;
+                case "low": 
                 case "Low":   return Low;
+                case "close":
                 case "Close": return Close;
             }
 

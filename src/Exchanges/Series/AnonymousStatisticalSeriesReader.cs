@@ -2,8 +2,10 @@ using System;
 
 namespace CryptoBot.Exchanges.Series
 {
-    public class AnonymousStatisticalSeriesReader<T> : StatisticalSeriesReader<T>
+    public class AnonymousStatisticalSeriesReader<T> : StatisticalSeriesReader<T>, IDisposable
     {
+        public bool Disposed { get; private set; }
+
         public Action<StatisticalSeriesNode<T>> OnPreAddAction;
         public Action<StatisticalSeriesNode<T>> OnPostAddAction;
         public Action<StatisticalSeriesNode<T>> OnPreUpdateAction;
@@ -23,6 +25,7 @@ namespace CryptoBot.Exchanges.Series
             Action onComplete = null
         )
         {
+            Disposed = false;
             OnPreAddAction = onPreAdd;
             OnPostAddAction = onPostAdd;
             OnPreUpdateAction = onPreUpdate;
@@ -65,6 +68,13 @@ namespace CryptoBot.Exchanges.Series
         public override void OnFinalizeRecord(StatisticalSeriesNode<T> node)
         {
             if (OnFinalizeRecordAction != null) OnFinalizeRecordAction(node);
+        }
+
+        public void Dispose()
+        {
+            if (Disposed) return;
+            Source.UnbindReader(this);
+            Disposed = true;
         }
     }
 }

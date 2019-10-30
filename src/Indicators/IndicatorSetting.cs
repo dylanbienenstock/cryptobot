@@ -1,3 +1,4 @@
+using System;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 
@@ -10,6 +11,22 @@ namespace CryptoBot.Indicators
         [JsonConverter(typeof(StringEnumConverter))]
         public IndicatorSettingType Type;
         public dynamic DefaultValue;
+
+        public string TypescriptType
+        {
+            get
+            {
+                switch (Type)
+                {
+                    case IndicatorSettingType.Int:
+                    case IndicatorSettingType.Float:
+                        return "number";
+                    case IndicatorSettingType.Aspect:
+                        return "'open' | 'high' | 'low' | 'close'";
+                }
+                return "unknown";
+            }
+        }
 
         public IndicatorSetting(string key, string name, IndicatorSettingType type, dynamic defaultValue)
         {

@@ -3,7 +3,9 @@
         <OutputType>library</OutputType>
         <TargetFramework>netcoreapp2.2</TargetFramework>
         <NoWarn>$(NoWarn);NU1701</NoWarn>
+        <!-- <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile> -->
     </PropertyGroup>
+
 
     <ItemGroup>
         <PackageReference Include="CommandLineParser" Version="2.4.3" />

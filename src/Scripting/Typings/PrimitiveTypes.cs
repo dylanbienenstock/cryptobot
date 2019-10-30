@@ -33,7 +33,11 @@ namespace CryptoBot.Scripting.Typings
             _primitiveMap.TryGetValue(type, out string primitiveName);
 
             if (primitiveName == null) 
-                return defaultToReflectedName ? type.Name : "any";
+            {
+                if (!defaultToReflectedName)        return "any";
+                if (type.IsGenericType) return $"{type.Name.Split('`')[0]}<T>";
+                else return type.Name;
+            }
 
             return primitiveName;
         }

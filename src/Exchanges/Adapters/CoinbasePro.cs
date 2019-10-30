@@ -426,11 +426,6 @@ namespace CryptoBot.Exchanges.Adapters
             throw new NotImplementedException();
         }
 
-        public override decimal GetAmountStepSize(string symbol)
-        {
-            throw new NotImplementedException();
-        }
-
         public override Task<MarketTicker[]> GetMarketTickers()
         {
             throw new NotImplementedException();

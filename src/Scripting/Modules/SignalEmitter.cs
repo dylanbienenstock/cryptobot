@@ -3,13 +3,10 @@ using CryptoBot.Scripting.Typings;
 
 namespace CryptoBot.Scripting.Modules
 {
-    [TypescriptDefine]
-    public class SignalEmitter
+    [TypescriptDefine("SignalEmitter")]
+    public class SignalEmitter : Module
     {
         [JavascriptBindable]
-        public Action OnInit;
-
-        [JavascriptBindable]
-        public Action OnTick;
+        public Action OnTrade;
     }
 }

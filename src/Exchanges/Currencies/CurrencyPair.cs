@@ -9,6 +9,9 @@ namespace CryptoBot.Exchanges.Currencies
         public Currency Base;
         public Currency Quote;
 
+        public string BaseName => Enum.GetName(typeof(Currency), Base);
+        public string QuoteName => Enum.GetName(typeof(Currency), Quote);
+
         public CurrencyPair(Currency _base, Currency quote)
         {
             Base = _base;
